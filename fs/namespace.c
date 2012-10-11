@@ -1606,7 +1606,7 @@ static int do_change_type(struct path *path, int flag)
 /*
  * do loopback mount.
  */
-static int do_loopback(struct path *path, char *old_name,
+static int do_loopback(struct path *path, const char *old_name,
 				int recurse)
 {
 	LIST_HEAD(umount_list);
@@ -1734,7 +1734,7 @@ static inline int tree_contains_unbindable(struct mount *mnt)
 	return 0;
 }
 
-static int do_move_mount(struct path *path, char *old_name)
+static int do_move_mount(struct path *path, const char *old_name)
 {
 	struct path old_path, parent_path;
 	struct mount *p;
@@ -1873,7 +1873,7 @@ unlock:
  * namespace's tree
  */
 static int do_new_mount(struct path *path, const char *fstype, int flags,
-			int mnt_flags, char *name, void *data)
+			int mnt_flags, const char *name, void *data)
 {
 	struct file_system_type *type;
 	struct user_namespace *user_ns;
@@ -2172,8 +2172,8 @@ int copy_mount_string(const void __user *data, char **where)
  * Therefore, if this magic number is present, it carries no information
  * and must be discarded.
  */
-long do_mount(char *dev_name, char *dir_name, char *type_page,
-		  unsigned long flags, void *data_page)
+long do_mount(const char *dev_name, const char *dir_name,
+		const char *type_page, unsigned long flags, void *data_page)
 {
 	struct path path;
 	int retval = 0;
