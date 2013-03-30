@@ -2887,6 +2887,10 @@ static struct rcg_clk cci_clk_src = {
 static struct clk_freq_tbl ftbl_camss_gp0_1_clk[] = {
 	F_MM(   10000,    cxo,  16,   1, 120),
 	F_MM(   20000,    cxo,  16,   1,  50),
+#if defined(CONFIG_MSM8974_PWM_VIBRATOR)
+	F_MM(29268,       cxo,  16,   1,  41), /* for 230Hz */
+	F_MM(22222,       cxo,  16,   1,  54), /* for 175Hz */
+#endif
 	F_MM( 6000000,  gpll0,  10,   1,  10),
 	F_MM(12000000,  gpll0,  10,   1,   5),
 	F_MM(13000000,  gpll0,  10,  13,  60),
@@ -5091,6 +5095,10 @@ static struct clk_lookup msm_clocks_8974_common[] __initdata = {
 	CLK_LOOKUP("lut_clk", mdss_mdp_lut_clk.c, "mdp.0"),
 	CLK_LOOKUP("core_clk_src", mdp_clk_src.c, "mdp.0"),
 	CLK_LOOKUP("vsync_clk", mdss_vsync_clk.c, "mdp.0"),
+
+#if defined(CONFIG_MSM8974_PWM_VIBRATOR)
+	CLK_LOOKUP("cam_gp1_clk", camss_gp1_clk.c, "vibrator"),
+#endif
 
 	/* MM sensor clocks placeholder */
 	CLK_LOOKUP("", camss_mclk0_clk.c, ""),
