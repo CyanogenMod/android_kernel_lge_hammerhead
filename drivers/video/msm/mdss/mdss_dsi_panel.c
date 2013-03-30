@@ -37,6 +37,10 @@ static DEFINE_MUTEX(panel_cmd_mutex);
 
 DEFINE_LED_TRIGGER(bl_led_trigger);
 
+#if defined(CONFIG_BACKLIGHT_LM3630)
+extern void lm3630_lcd_backlight_set_level(int level);
+#endif
+
 void mdss_dsi_panel_pwm_cfg(struct mdss_dsi_ctrl_pdata *ctrl)
 {
 	ctrl->pwm_bl = pwm_request(ctrl->pwm_lpg_chan, "lcd-bklt");
@@ -394,7 +398,11 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 
 	switch (ctrl_pdata->bklt_ctrl) {
 	case BL_WLED:
+#if defined(CONFIG_BACKLIGHT_LM3630)
+		lm3630_lcd_backlight_set_level(bl_level);
+#else
 		led_trigger_event(bl_led_trigger, bl_level);
+#endif
 		break;
 	case BL_PWM:
 		mdss_dsi_panel_bklt_pwm(ctrl_pdata, bl_level);
