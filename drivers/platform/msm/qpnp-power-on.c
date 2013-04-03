@@ -1109,6 +1109,7 @@ static int __devinit qpnp_pon_probe(struct spmi_device *spmi)
 	struct device_node *itr = NULL;
 	u32 delay = 0, s3_debounce = 0;
 	int rc, sys_reset, index;
+	int disable = 0;
 	u8 pon_sts = 0, buf[2];
 	const char *s3_src;
 	u8 s3_src_reg;
@@ -1133,8 +1134,12 @@ static int __devinit qpnp_pon_probe(struct spmi_device *spmi)
 	pon->spmi = spmi;
 
 	/* get the total number of pon configurations */
-	while ((itr = of_get_next_child(spmi->dev.of_node, itr)))
+	while ((itr = of_get_next_child(spmi->dev.of_node, itr))) {
+		rc = of_property_read_u32(itr, "qcom,disable", &disable);
+		if (!rc && disable)
+			continue;
 		pon->num_pon_config++;
+	}
 
 	if (!pon->num_pon_config) {
 		/* No PON config., do not register the driver */
