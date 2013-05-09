@@ -75,6 +75,8 @@ struct proc_maps_private {
 #endif
 };
 
+extern const struct file_operations proc_reclaim_operations;
+
 void proc_init_inodecache(void);
 
 static inline struct pid *proc_pid(struct inode *inode)
