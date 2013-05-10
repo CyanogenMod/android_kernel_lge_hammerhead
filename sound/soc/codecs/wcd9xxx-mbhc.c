@@ -4996,6 +4996,10 @@ int wcd9xxx_mbhc_init(struct wcd9xxx_mbhc *mbhc, struct wcd9xxx_resmgr *resmgr,
 		impedance_detect_en = impedance_det_en ? 1 : 0;
 
 	core_res = mbhc->resmgr->core_res;
+
+	if (is_mbhc_disabled())
+		goto skip;
+
 	ret = wcd9xxx_request_irq(core_res, mbhc->intr_ids->insertion,
 				  wcd9xxx_hs_insert_irq,
 				  "Headset insert detect", mbhc);
@@ -5033,6 +5037,7 @@ int wcd9xxx_mbhc_init(struct wcd9xxx_mbhc *mbhc, struct wcd9xxx_resmgr *resmgr,
 		goto err_release_irq;
 	}
 
+skip :
 	ret = wcd9xxx_request_irq(core_res, mbhc->intr_ids->hph_left_ocp,
 				  wcd9xxx_hphl_ocp_irq, "HPH_L OCP detect",
 				  mbhc);
