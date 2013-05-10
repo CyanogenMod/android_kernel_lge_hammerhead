@@ -56,6 +56,10 @@
 		status = "disabled";
 	};
 
+	sound {
+		qcom,mbhc-disabled = <0>;
+	};
+
 	vibrator {
 		motor-amp = <50>;
 		vibe-warmup-delay = <0>;

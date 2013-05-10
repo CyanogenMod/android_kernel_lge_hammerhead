@@ -88,6 +88,8 @@
 		qcom,model = "msm8974-taiko-mtp-snd-card";
 		qcom,mbhc-audio-jack-type = "6-pole-jack";
 
+		qcom,mbhc-disabled = <1>;
+
 		qcom,hdmi-audio-rx;
 
 		qcom,audio-routing =
