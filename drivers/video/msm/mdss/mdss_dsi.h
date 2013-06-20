@@ -298,8 +298,9 @@ struct mdss_dsi_ctrl_pdata {
 	struct dsi_buf rx_buf;
 };
 
-int dsi_panel_device_register(struct platform_device *pdev,
-			      struct mdss_panel_common_pdata *panel_data);
+int dsi_panel_device_register(struct device_node *pan_node,
+			      struct mdss_panel_common_pdata *panel_data,
+			      bool cmd_cfg_cont_splash);
 
 int mdss_dsi_cmds_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 		struct dsi_cmd_desc *cmds, int cnt);
@@ -353,6 +354,9 @@ int mdss_dsi_cmdlist_commit(struct mdss_dsi_ctrl_pdata *ctrl, int from_mdp);
 void mdss_dsi_cmdlist_kickoff(int intf);
 int mdss_dsi_bta_status_check(struct mdss_dsi_ctrl_pdata *ctrl);
 bool __mdss_dsi_clk_enabled(struct mdss_dsi_ctrl_pdata *ctrl, u8 clk_type);
+
+int mdss_dsi_panel_init(struct device_node *node,
+		struct mdss_panel_common_pdata *vendor_pdata);
 
 int mdss_dsi_register_recovery_handler(struct mdss_dsi_ctrl_pdata *ctrl,
 		struct mdss_panel_recovery *recovery);

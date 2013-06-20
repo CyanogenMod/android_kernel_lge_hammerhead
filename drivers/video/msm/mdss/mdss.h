@@ -23,6 +23,8 @@
 
 #include <mach/iommu_domains.h>
 
+#include "mdss_panel.h"
+
 #define MDSS_REG_WRITE(addr, val) writel_relaxed(val, mdss_res->mdp_base + addr)
 #define MDSS_REG_READ(addr) readl_relaxed(mdss_res->mdp_base + addr)
 
@@ -199,10 +201,11 @@ struct mdss_data_type {
 	struct mdss_debug_inf debug_inf;
 	int current_bus_idx;
 	bool mixer_switched;
-	bool ulps;
+	struct mdss_panel_cfg pan_cfg;
 
 	int handoff_pending;
 	struct mdss_prefill_data prefill_data;
+	bool ulps;
 
 	u64 ab[MDSS_MAX_HW_BLK];
 	u64 ib[MDSS_MAX_HW_BLK];
