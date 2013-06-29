@@ -183,6 +183,7 @@ struct dsi_clk_desc {
 	u32 pre_div_func;
 };
 
+#define MDSS_DSI_RST_SEQ_LEN 6
 
 struct dsi_panel_cmds {
 	char *buf;
@@ -272,6 +273,7 @@ struct mdss_dsi_ctrl_pdata {
 	u32 pclk_rate;
 	u32 byte_clk_rate;
 	struct dss_module_power power_data;
+	int rst_seq[MDSS_DSI_RST_SEQ_LEN];
 	u32 dsi_irq_mask;
 	struct mdss_hw *dsi_hw;
 	struct mdss_panel_recovery *recovery;
@@ -335,7 +337,7 @@ int mdss_dsi_clk_init(struct platform_device *pdev,
 void mdss_dsi_clk_deinit(struct mdss_dsi_ctrl_pdata *ctrl_pdata);
 int mdss_dsi_enable_bus_clocks(struct mdss_dsi_ctrl_pdata *ctrl_pdata);
 void mdss_dsi_disable_bus_clocks(struct mdss_dsi_ctrl_pdata *ctrl_pdata);
-void mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable);
+int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable);
 void mdss_dsi_phy_disable(struct mdss_dsi_ctrl_pdata *ctrl);
 void mdss_dsi_phy_init(struct mdss_panel_data *pdata);
 void mdss_dsi_phy_sw_reset(unsigned char *ctrl_base);
