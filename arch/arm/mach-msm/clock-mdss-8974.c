@@ -1043,8 +1043,6 @@ static int dsi_pll_lock_status(void)
 	u32 status;
 	int pll_locked = 0;
 
-	dsi_pll_toggle_lock_detect();
-
 	/* poll for PLL ready status */
 	if (readl_poll_timeout_noirq((mdss_dsi_base +
 			DSI_0_PHY_PLL_UNIPHY_PLL_STATUS),
@@ -1098,7 +1096,7 @@ static int dsi_pll_enable_seq_m(void)
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x0f);
 	udelay(1000);
 
-	pll_locked = dsi_pll_lock_status();
+	pll_locked = dsi_pll_toggle_lock_detect_and_check_status();
 	for (i = 0; (i < 4) && !pll_locked; i++) {
 		DSS_REG_W(mdss_dsi_base,
 			DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x07);
@@ -1109,7 +1107,7 @@ static int dsi_pll_enable_seq_m(void)
 		DSS_REG_W(mdss_dsi_base,
 			DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x0f);
 		udelay(1000);
-		pll_locked = dsi_pll_lock_status();
+		pll_locked = dsi_pll_toggle_lock_detect_and_check_status();
 	}
 
 	if (pll_locked)
