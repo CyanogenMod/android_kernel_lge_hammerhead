@@ -149,6 +149,9 @@ Optional properties:
 				total numbers of MMBs per pipe while values, if
 				any, following first one denotes indexes of MMBs
 				to that RGB pipe.
+- qcom,mdss-highest-bank-bit: Property to indicate tile format as opposed to usual
+				linear format. The value tells the GPU highest memory
+				 bank bit used.
 
 Optional subnodes:
 Child nodes representing the frame buffer virtual devices.
