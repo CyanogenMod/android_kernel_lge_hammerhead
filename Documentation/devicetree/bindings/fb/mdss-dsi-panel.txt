@@ -61,6 +61,10 @@ Optional properties:
 - qcom,pwm-pmic-gpio:			PMIC gpio binding to backlight.
 - qcom,mdss-pan-broadcast-mode:		Boolean used to enable broadcast mode.
 - qcom,cont-splash-enabled:		Boolean used to enable continuous splash mode.
+					If this property is specified, it is required to
+					to specify the memory reserved for the splash
+					screen using the qcom,memblock-reserve binding
+					for the framebuffer device attached to the panel.
 - qcom,fbc-enabled:			Boolean used to enable frame buffer compression mode.
 - qcom,fbc-mode-select:			An array of length 7 that specifies the fbc mode supported
 					by the panel. FBC enabled panels may or may not support

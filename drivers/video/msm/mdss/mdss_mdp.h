@@ -400,6 +400,9 @@ struct mdss_overlay_private {
 	struct mdss_mdp_vsync_handler vsync_retire_handler;
 	struct work_struct retire_work;
 	int retire_cnt;
+
+	u32 splash_mem_addr;
+	u32 splash_mem_size;
 };
 
 #define is_vig_pipe(_pipe_id_) ((_pipe_id_) <= MDSS_MDP_SSPP_VIG2)
@@ -427,7 +430,6 @@ static inline u32 mdss_mdp_pingpong_read(struct mdss_mdp_mixer *mixer, u32 reg)
 
 irqreturn_t mdss_mdp_isr(int irq, void *ptr);
 int mdss_iommu_attach(struct mdss_data_type *mdata);
-int mdss_mdp_video_copy_splash_screen(struct mdss_panel_data *pdata);
 int mdss_iommu_dettach(struct mdss_data_type *mdata);
 void mdss_mdp_irq_clear(struct mdss_data_type *mdata,
 		u32 intr_type, u32 intf_num);
@@ -461,8 +463,6 @@ struct mdss_mdp_ctl *mdss_mdp_ctl_init(struct mdss_panel_data *pdata,
 					struct msm_fb_data_type *mfd);
 int mdss_mdp_video_reconfigure_splash_done(struct mdss_mdp_ctl *ctl);
 int mdss_mdp_cmd_reconfigure_splash_done(struct mdss_mdp_ctl *ctl);
-int mdss_mdp_video_copy_splash_screen(struct mdss_panel_data *pdata);
-void mdss_mdp_ctl_splash_start(struct mdss_panel_data *pdata);
 int mdss_mdp_ctl_splash_finish(struct mdss_mdp_ctl *ctl);
 int mdss_mdp_ctl_setup(struct mdss_mdp_ctl *ctl);
 int mdss_mdp_ctl_split_display_setup(struct mdss_mdp_ctl *ctl,
