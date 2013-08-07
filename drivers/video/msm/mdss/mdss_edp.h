@@ -298,7 +298,6 @@ struct mdss_edp_drv_pdata {
 
 	/* gpios */
 	int gpio_panel_en;
-	int gpio_panel_pwm;
 
 	/* backlight */
 	struct pwm_device *bl_pwm;
