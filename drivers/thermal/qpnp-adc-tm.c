@@ -1297,15 +1297,6 @@ static irqreturn_t qpnp_adc_tm_low_thr_isr(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t qpnp_adc_tm_isr(int irq, void *dev_id)
-{
-	struct qpnp_adc_tm_drv *adc_tm = dev_id;
-
-	complete(&adc_tm->adc->adc_rslt_completion);
-
-	return IRQ_HANDLED;
-}
-
 static int qpnp_adc_read_temp(struct thermal_zone_device *thermal,
 			     unsigned long *temp)
 {
@@ -1588,17 +1579,6 @@ static int __devinit qpnp_adc_tm_probe(struct spmi_device *spmi)
 		pr_err("Invalid irq\n");
 		rc = -ENXIO;
 		goto fail;
-	}
-
-	rc = devm_request_irq(&spmi->dev, adc_tm->adc->adc_irq_eoc,
-				qpnp_adc_tm_isr, IRQF_TRIGGER_RISING,
-				"qpnp_adc_tm_interrupt", adc_tm);
-	if (rc) {
-		dev_err(&spmi->dev,
-			"failed to request adc irq with error %d\n", rc);
-		goto fail;
-	} else {
-		enable_irq_wake(adc_tm->adc->adc_irq_eoc);
 	}
 
 	rc = devm_request_irq(&spmi->dev, adc_tm->adc->adc_high_thr_irq,
