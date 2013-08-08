@@ -84,3 +84,4 @@ GTAGS
 *.orig
 *~
 \#*#
+build.sh
