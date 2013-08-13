@@ -1187,8 +1187,10 @@ int mdss_dsi_panel_init(struct device_node *node,
 		pr_info("%s: Panel Name = %s\n", __func__, panel_name);
 
 	rc = mdss_panel_parse_dt(node, vendor_pdata);
-	if (rc)
+	if (rc) {
+		pr_err("%s:%d panel dt parse failed\n", __func__, __LINE__);
 		return rc;
+	}
 
 	partial_update_enabled = of_property_read_bool(node,
 						"qcom,partial-update-enabled");
