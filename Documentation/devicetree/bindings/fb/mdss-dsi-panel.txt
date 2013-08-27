@@ -93,7 +93,7 @@ Optional properties:
 - qcom,mdss-pan-underflow-clr:		Specifies the controller settings for the panel underflow clear
 					settings. Default value is 0xff.
 - qcom,mdss-pan-bl-ctrl:		A string that specifies the implementation of backlight
-					control for this panel.
+- qcom,mdss-dsi-pan-enable-dynamic-fps:	Boolean used to enable change in frame rate dynamically.
 					"bl_ctrl_pwm" = Backlight controlled by PWM gpio.
 					"bl_ctrl_wled" = Backlight controlled by WLED.
 					"bl_ctrl_dcs_cmds" = Backlight controlled by DCS commands.
@@ -190,8 +190,16 @@ Optional properties:
 						transmitted
 					byte 5, 6: 16 bits length in network byte order
 					byte 7 and beyond: number byte of payload
+
 - qcom,partial-update-enabled:		Boolean used to enable partial
 					panel update for command mode panels.
+
+- qcom,mdss-dsi-pan-fps-update:		A string that specifies when to change the frame rate.
+					"dfps_suspend_resume_mode"= FPS change request is
+						implemented during suspend/resume.
+					"dfps_immediate_clk_mode" = FPS change request is
+						implemented immediately using DSI clocks.
+					control for this panel.
 
 Note, if a given optional qcom,* binding is not present, then the driver will configure
 the default values specified.
@@ -232,5 +240,7 @@ Example:
 		qcom,fbc-budget-ctl = <675 5 91>;
 		qcom,fbc-lossy-mode = <0 0xc0 0 3>;
 		qcom,partial-update-enabled;
+		qcom,mdss-dsi-pan-enable-dynamic-fps;
+		qcom,mdss-dsi-pan-fps-update = "dfps_suspend_resume_mode";
 	};
 };
