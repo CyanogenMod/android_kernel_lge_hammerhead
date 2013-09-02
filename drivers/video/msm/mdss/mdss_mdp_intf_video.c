@@ -19,6 +19,7 @@
 #include <linux/bootmem.h>
 #include <linux/memblock.h>
 
+#include "mdss_fb.h"
 #include "mdss_mdp.h"
 #include "mdss_panel.h"
 
