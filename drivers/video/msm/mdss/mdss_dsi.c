@@ -1401,6 +1401,7 @@ int dsi_panel_device_register(struct platform_device *pdev,
 	}
 
 	ctrl_pdata->panel_data.event_handler = mdss_dsi_event_handler;
+	ctrl_pdata->check_status = mdss_dsi_bta_status_check;
 
 	ctrl_pdata->on_cmds = panel_data->on_cmds;
 	ctrl_pdata->off_cmds = panel_data->off_cmds;
