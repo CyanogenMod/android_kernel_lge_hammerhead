@@ -1591,7 +1591,7 @@ static int __mdss_fb_perform_commit(struct msm_fb_data_type *mfd)
 
 	if (fb_backup->disp_commit.flags & MDP_DISPLAY_COMMIT_OVERLAY) {
 		if (mfd->mdp.kickoff_fnc)
-			ret = mfd->mdp.kickoff_fnc(mfd);
+			ret = mfd->mdp.kickoff_fnc(mfd, &fb_backup->disp_commit);
 		else
 			pr_warn("no kickoff function setup for fb%d\n",
 					mfd->index);
