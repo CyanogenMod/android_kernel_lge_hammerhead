@@ -3093,8 +3093,7 @@ static int mdss_ad_init_checks(struct msm_fb_data_type *mfd)
 		return -EHOSTDOWN;
 	}
 	if (mixer_num > mdata->nmax_concurrent_ad_hw) {
-		pr_debug("too many mixers, not supported, %d > %d", mixer_num,
-						mdata->nmax_concurrent_ad_hw);
+		pr_debug("too many mixers, not supported, %d", mixer_num);
 		return ret;
 	}
 
