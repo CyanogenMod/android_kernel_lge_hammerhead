@@ -1371,12 +1371,6 @@ static int __devinit msm_rpm_dev_probe(struct platform_device *pdev)
 
 		BUG_ON(!standalone);
 		complete(&msm_rpm_data.smd_open);
-	} else {
-		/*
-		 * Override DT's suggestion to try standalone; since we have an
-		 * SMD channel.
-		 */
-		standalone = false;
 	}
 
 	wait_for_completion(&msm_rpm_data.smd_open);
