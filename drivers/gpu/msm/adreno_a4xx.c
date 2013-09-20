@@ -234,6 +234,5 @@ struct adreno_gpudev adreno_a4xx_gpudev = {
 	.irq_control = a3xx_irq_control,
 	.irq_handler = a3xx_irq_handler,
 	.irq_pending = a3xx_irq_pending,
-	.busy_cycles = a3xx_busy_cycles,
 	.start = a4xx_start,
 };
