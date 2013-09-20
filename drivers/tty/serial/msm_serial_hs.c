@@ -155,7 +155,6 @@ struct msm_hs_rx {
 	struct tasklet_struct tlet;
 	struct msm_hs_sps_ep_conn_data prod;
 };
-
 enum buffer_states {
 	NONE_PENDING = 0x0,
 	FIFO_OVERRUN = 0x1,
