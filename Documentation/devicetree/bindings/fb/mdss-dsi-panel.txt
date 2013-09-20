@@ -190,6 +190,8 @@ Optional properties:
 						transmitted
 					byte 5, 6: 16 bits length in network byte order
 					byte 7 and beyond: number byte of payload
+- qcom,partial-update-enabled:		Boolean used to enable partial
+					panel update for command mode panels.
 
 Note, if a given optional qcom,* binding is not present, then the driver will configure
 the default values specified.
@@ -229,5 +231,6 @@ Example:
 		qcom,fbc-mode = <12 0 1 2 1 1 1>;
 		qcom,fbc-budget-ctl = <675 5 91>;
 		qcom,fbc-lossy-mode = <0 0xc0 0 3>;
+		qcom,partial-update-enabled;
 	};
 };
