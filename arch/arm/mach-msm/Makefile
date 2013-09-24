@@ -436,3 +436,6 @@ obj-$(CONFIG_CPU_FREQ_MSM) += cpufreq.o
 
 obj-$(CONFIG_WALL_CLK) += wallclk.o
 obj-$(CONFIG_WALL_CLK_SYSFS) += wallclk_sysfs.o
+
+obj-$(CONFIG_PERFMAP) += perfmap.o
+obj-$(CONFIG_ARCH_MSM8974) += cpubw-krait.o
