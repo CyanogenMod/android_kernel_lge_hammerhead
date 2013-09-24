@@ -405,6 +405,7 @@ struct mdss_overlay_private {
 	bool handoff;
 	u32 splash_mem_addr;
 	u32 splash_mem_size;
+	u32 sd_enabled;
 };
 
 #define is_vig_pipe(_pipe_id_) ((_pipe_id_) <= MDSS_MDP_SSPP_VIG2)
