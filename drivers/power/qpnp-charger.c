@@ -399,6 +399,7 @@ struct qpnp_chg_chip {
 	bool				ext_ovp_ic_gpio_enabled;
 	unsigned int			ext_ovp_isns_gpio;
 	unsigned int			usb_trim_default;
+	bool				use_only_smbb_boost;
 	u8				chg_temp_thresh_default;
 };
 
@@ -743,6 +744,9 @@ qpnp_chg_is_usb_chg_plugged_in(struct qpnp_chg_chip *chip)
 {
 	u8 usb_chgpth_rt_sts;
 	int rc;
+
+	if (!chip->usb_chgpth_base)
+		return 0;
 
 	rc = qpnp_chg_read(chip, &usb_chgpth_rt_sts,
 				 INT_RT_STS(chip->usb_chgpth_base), 1);
@@ -1207,6 +1211,9 @@ qpnp_chg_usb_suspend_enable(struct qpnp_chg_chip *chip, int enable)
 static int
 qpnp_chg_charge_en(struct qpnp_chg_chip *chip, int enable)
 {
+	if (!chip->chgr_base)
+		return 0;
+
 	if (chip->insertion_ocv_uv == 0 && enable) {
 		pr_debug("Battery not present, skipping\n");
 		return 0;
@@ -1220,6 +1227,9 @@ qpnp_chg_charge_en(struct qpnp_chg_chip *chip, int enable)
 static int
 qpnp_chg_force_run_on_batt(struct qpnp_chg_chip *chip, int disable)
 {
+	if (!chip->chgr_base)
+		return 0;
+
 	/* Don't run on battery for batteryless hardware */
 	if (chip->use_default_batt_values)
 		return 0;
@@ -1509,6 +1519,9 @@ qpnp_chg_vddmax_and_trim_set(struct qpnp_chg_chip *chip,
 	int rc, trim_set;
 	u8 vddmax = 0, trim = 0;
 
+	if (!chip->chgr_base)
+		return 0;
+
 	if (voltage < QPNP_CHG_VDDMAX_MIN
 			|| voltage > QPNP_CHG_V_MAX_MV) {
 		pr_err("bad mV=%d asked to set\n", voltage);
@@ -1702,6 +1715,9 @@ qpnp_chg_usb_usbin_valid_irq_handler(int irq, void *_chip)
 	struct qpnp_chg_chip *chip = _chip;
 	int usb_present, host_mode, usbin_health;
 	u8 psy_health_sts;
+
+	if (!chip->usb_chgpth_base)
+		return IRQ_HANDLED;
 
 	usb_present = qpnp_chg_is_usb_chg_plugged_in(chip);
 	host_mode = qpnp_chg_is_otg_en_set(chip);
@@ -1935,6 +1951,9 @@ qpnp_chg_dc_dcin_valid_irq_handler(int irq, void *_chip)
 {
 	struct qpnp_chg_chip *chip = _chip;
 	int dc_present;
+
+	if (!chip->dc_chgpth_base)
+		return IRQ_HANDLED;
 
 	dc_present = qpnp_chg_is_dc_chg_plugged_in(chip);
 	pr_debug("dcin-valid triggered: %d\n", dc_present);
@@ -2419,6 +2438,9 @@ get_prop_batt_present(struct qpnp_chg_chip *chip)
 	u8 batt_present;
 	int rc;
 
+	if (!chip->bat_if_base)
+		return 0;
+
 	rc = qpnp_chg_read(chip, &batt_present,
 				chip->bat_if_base + CHGR_BAT_IF_PRES_STATUS, 1);
 	if (rc) {
@@ -2435,6 +2457,9 @@ get_prop_batt_health(struct qpnp_chg_chip *chip)
 {
 	u8 batt_health;
 	int rc;
+
+	if (!chip->bat_if_base)
+		return POWER_SUPPLY_HEALTH_UNKNOWN;
 
 	rc = qpnp_chg_read(chip, &batt_health,
 				chip->bat_if_base + CHGR_STATUS, 1);
@@ -3098,10 +3123,14 @@ qpnp_chg_input_current_settled(struct qpnp_chg_chip *chip)
 	u8 reg, chgr_sts, ibat_trim, i;
 	bool usb_present = qpnp_chg_is_usb_chg_plugged_in(chip);
 
+	if (!chip->chgr_base)
+		return 0;
+
 	if (!usb_present) {
 		pr_debug("Ignoring AICL settled, since USB is removed\n");
 		return 0;
 	}
+
 	chip->aicl_settled = true;
 
 	/*
@@ -5180,6 +5209,30 @@ qpnp_charger_read_dt_props(struct qpnp_chg_chip *chip)
 		}
 	}
 
+	chip->use_only_smbb_boost =
+			of_property_read_bool(chip->spmi->dev.of_node,
+					"qcom,use-only-smbb-boost");
+
+	return rc;
+}
+
+static int
+qpnp_get_smbb_boost_wa_dt_prop(struct qpnp_chg_chip *chip)
+{
+	int rc = 0;
+	unsigned int chgr_base = 0;
+	unsigned int usb_chgpth_base = 0;
+
+	rc = of_property_read_u32(chip->spmi->dev.of_node,
+					"qcom,chgr-base",
+					&chgr_base);
+	chip->chgr_base = (u16)chgr_base;
+
+	rc = of_property_read_u32(chip->spmi->dev.of_node,
+					"qcom,usb-chgpth-base",
+					&usb_chgpth_base);
+	chip->usb_chgpth_base = (u16)usb_chgpth_base;
+
 	return rc;
 }
 
@@ -5536,13 +5589,16 @@ qpnp_charger_probe(struct spmi_device *spmi)
 	qpnp_chg_usb_chg_gone_irq_handler(chip->chg_gone.irq, chip);
 	qpnp_chg_usb_usbin_valid_irq_handler(chip->usbin_valid.irq, chip);
 	qpnp_chg_dc_dcin_valid_irq_handler(chip->dcin_valid.irq, chip);
-	power_supply_set_present(chip->usb_psy,
-			qpnp_chg_is_usb_chg_plugged_in(chip));
 
-	/* Set USB psy online to avoid userspace from shutting down if battery
-	 * capacity is at zero and no chargers online. */
-	if (qpnp_chg_is_usb_chg_plugged_in(chip))
-		power_supply_set_online(chip->usb_psy, 1);
+	if (chip->usb_chgpth_base) {
+		power_supply_set_present(chip->usb_psy,
+				qpnp_chg_is_usb_chg_plugged_in(chip));
+
+		/* Set USB psy online to avoid userspace from shutting down if battery
+		 * capacity is at zero and no chargers online. */
+		if (qpnp_chg_is_usb_chg_plugged_in(chip))
+			power_supply_set_online(chip->usb_psy, 1);
+	}
 
 	schedule_delayed_work(&chip->aicl_check_work,
 		msecs_to_jiffies(EOC_CHECK_PERIOD_MS));
@@ -5553,6 +5609,10 @@ qpnp_charger_probe(struct spmi_device *spmi)
 			qpnp_chg_is_dc_chg_plugged_in(chip),
 			get_prop_batt_present(chip),
 			get_prop_batt_health(chip));
+
+	if (chip->use_only_smbb_boost && (chip->flags & BOOST_FLASH_WA))
+		qpnp_get_smbb_boost_wa_dt_prop(chip);
+
 	return 0;
 
 unregister_dc_psy:
