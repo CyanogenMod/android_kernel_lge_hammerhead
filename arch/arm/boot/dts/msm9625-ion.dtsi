@@ -16,11 +16,7 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		qcom,ion-heap@30 { /* SYSTEM HEAP */
-			reg = <30>;
-		};
-
-		qcom,ion-heap@25 { /* IOMMU HEAP */
+		qcom,ion-heap@25 { /* SYSTEM HEAP */
 			reg = <25>;
 		};
 
