@@ -539,6 +539,7 @@ static int camera_v4l2_open(struct file *filep)
 		goto vb2_q_fail;
 
 	if (!atomic_read(&pvdev->opened)) {
+		pm_stay_awake(&pvdev->vdev->dev);
 
 		/* create a new session when first opened */
 		rc = msm_create_session(pvdev->vdev->num, pvdev->vdev);
@@ -571,6 +572,7 @@ post_fail:
 command_ack_q_fail:
 	msm_destroy_session(pvdev->vdev->num);
 session_fail:
+	pm_relax(&pvdev->vdev->dev);
 	camera_v4l2_vb2_q_release(filep);
 vb2_q_fail:
 	camera_v4l2_fh_release(filep);
@@ -617,6 +619,7 @@ static int camera_v4l2_close(struct file *filep)
 		/* This should take care of both normal close
 		 * and application crashes */
 		msm_destroy_session(pvdev->vdev->num);
+		pm_relax(&pvdev->vdev->dev);
 
 	} else {
 		camera_pack_event(filep, MSM_CAMERA_SET_PARM,
@@ -716,6 +719,7 @@ int camera_init_v4l2(struct device *dev, unsigned int *session)
 	*session = pvdev->vdev->num;
 	atomic_set(&pvdev->opened, 0);
 	video_set_drvdata(pvdev->vdev, pvdev);
+	device_init_wakeup(&pvdev->vdev->dev, 1);
 	goto init_end;
 
 video_register_fail:
