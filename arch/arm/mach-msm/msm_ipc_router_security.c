@@ -289,6 +289,12 @@ int msm_ipc_check_send_permissions(void *data)
 		if (in_egroup_p(rule->group_id[i]))
 			return 1;
 	}
+
+        /* Ugly hack: Allow all callers in the AID_SENSORS group to pass,
+         *            this will allow the sensors.qcom to work under CM */
+	if (in_egroup_p(3011)) // AID_SENSORS
+		return 1;
+
 	return 0;
 }
 EXPORT_SYMBOL(msm_ipc_check_send_permissions);
