@@ -71,6 +71,11 @@ struct mdss_intr {
 	spinlock_t lock;
 };
 
+struct mdss_fudge_factor {
+	u32 numer;
+	u32 denom;
+};
+
 struct mdss_debug_inf {
 	void *debug_data;
 	int (*debug_dump_stats)(void *data, char *buf, int len);
@@ -127,6 +132,11 @@ struct mdss_data_type {
 	u32 curr_bw_uc_idx;
 	u32 bus_hdl;
 	struct msm_bus_scale_pdata *bus_scale_table;
+
+	struct mdss_fudge_factor ab_factor;
+	struct mdss_fudge_factor ib_factor;
+	struct mdss_fudge_factor high_ib_factor;
+	struct mdss_fudge_factor clk_factor;
 
 	struct mdss_hw_settings *hw_settings;
 
