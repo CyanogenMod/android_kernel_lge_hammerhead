@@ -871,6 +871,7 @@ static int mdss_dsi_event_handler(struct mdss_panel_data *pdata,
 		break;
 	case MDSS_EVENT_DSI_CMDLIST_KOFF:
 		mdss_dsi_cmdlist_commit(ctrl_pdata, 1);
+		break;
 	case MDSS_EVENT_PANEL_UPDATE_FPS:
 		if (arg != NULL) {
 			rc = mdss_dsi_dfps_config(pdata, (int)arg);
@@ -1075,13 +1076,14 @@ int dsi_panel_device_register(struct platform_device *pdev,
 {
 	struct mipi_panel_info *mipi;
 	int rc;
-	u32 tmp[9];
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata;
 	struct device_node *dsi_ctrl_np = NULL;
 	struct platform_device *ctrl_pdev = NULL;
 	bool dynamic_fps;
 	bool broadcast;
 	bool cont_splash_enabled = false;
+	struct mdss_panel_info *pinfo = &(panel_data->panel_info);
+	const char *data;
 
 	mipi  = &panel_data->panel_info.mipi;
 
@@ -1122,11 +1124,11 @@ int dsi_panel_device_register(struct platform_device *pdev,
 	if (broadcast)
 		ctrl_pdata->shared_pdata.broadcast_enable = 1;
 
-	dynamic_fps = of_property_read_bool(pan_node,
+	dynamic_fps = of_property_read_bool(pdev->dev.of_node,
 					  "qcom,mdss-dsi-pan-enable-dynamic-fps");
 	if (dynamic_fps) {
 		pinfo->dynamic_fps = true;
-		data = of_get_property(pan_node,
+		data = of_get_property(pdev->dev.of_node,
 					  "qcom,mdss-dsi-pan-fps-update", NULL);
 		if (data) {
 			if (!strcmp(data, "dfps_suspend_resume_mode")) {
