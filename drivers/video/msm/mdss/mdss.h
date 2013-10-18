@@ -183,6 +183,7 @@ struct mdss_data_type {
 	u32 nintf;
 
 	u32 pp_bus_hdl;
+	struct mdss_mdp_ad *ad_off;
 	struct mdss_ad_info *ad_cfgs;
 	u32 nad_cfgs;
 	u32 nmax_concurrent_ad_hw;
