@@ -2491,7 +2491,7 @@ int mdss_mdp_hist_start(struct mdp_histogram_start_req *req)
 		if (!i) {
 			ret = -EINVAL;
 			pr_warn("Must pass pipe arguments, %d", i);
-			goto hist_exit;
+			goto hist_stop_clk;
 		}
 
 		for (i = 0; i < MDSS_PP_ARG_NUM; i++) {
@@ -2501,10 +2501,9 @@ int mdss_mdp_hist_start(struct mdp_histogram_start_req *req)
 			if (IS_ERR_OR_NULL(pipe))
 				continue;
 			if (!pipe || pipe->num > MDSS_MDP_SSPP_VIG2) {
-				mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
 				ret = -EINVAL;
 				pr_warn("Invalid Hist pipe (%d)", i);
-				goto hist_exit;
+				goto hist_stop_clk;
 			}
 			done_shift_bit = (pipe->num * 4);
 			hist_info = &pipe->pp_res.hist;
@@ -2527,8 +2526,8 @@ int mdss_mdp_hist_start(struct mdp_histogram_start_req *req)
 							PP_FLAGS_DIRTY_HIST_COL;
 		}
 	}
+hist_stop_clk:
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
-
 hist_exit:
 	return ret;
 }
