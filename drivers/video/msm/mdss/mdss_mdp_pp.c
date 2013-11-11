@@ -1042,7 +1042,7 @@ static int pp_dspp_setup(u32 disp_num, struct mdss_mdp_mixer *mixer)
 		flags = 0;
 
 	mixer_cnt = mdss_mdp_get_ctl_mixers(disp_num, mixer_id);
-	if (dspp_num < mdata->nad_cfgs && (mixer_cnt != 2) &&
+	if (dspp_num < mdata->nad_cfgs && (mixer_cnt != mdata->nmax_concurrent_ad_hw) &&
 			ctl->mfd->panel_info->type != MIPI_CMD_PANEL) {
 		ret = mdss_mdp_ad_setup(ctl->mfd);
 		if (ret < 0)
@@ -3055,7 +3055,6 @@ void mdss_mdp_hist_intr_done(u32 isr)
 	};
 }
 
-#define MDSS_AD_MAX_MIXERS 1
 static int mdss_ad_init_checks(struct msm_fb_data_type *mfd)
 {
 	u32 mixer_id[MDSS_MDP_INTF_MAX_LAYERMIXER];
@@ -3082,8 +3081,9 @@ static int mdss_ad_init_checks(struct msm_fb_data_type *mfd)
 		pr_debug("no mixers connected, %d", mixer_num);
 		return -EHOSTDOWN;
 	}
-	if (mixer_num > MDSS_AD_MAX_MIXERS) {
-		pr_warn("too many mixers, not supported, %d", mixer_num);
+	if (mixer_num > mdata->nmax_concurrent_ad_hw) {
+		pr_debug("too many mixers, not supported, %d > %d", mixer_num,
+						mdata->nmax_concurrent_ad_hw);
 		return ret;
 	}
 
