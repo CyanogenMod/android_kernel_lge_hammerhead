@@ -778,8 +778,8 @@ static int mdss_panel_parse_dt(struct device_node *np,
 	else if (!strncmp(pdest, "display_2", 9))
 		pinfo->pdest = DISPLAY_2;
 	else {
-		pr_debug("%s: pdest not specified. Set Default\n",
-							__func__);
+		pr_debug("%s: incorrect pdest. Set Default\n",
+			__func__);
 		pinfo->pdest = DISPLAY_1;
 	}
 	rc = of_property_read_u32(np, "qcom,mdss-dsi-h-front-porch", &tmp);
