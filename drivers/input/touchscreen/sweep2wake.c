@@ -28,7 +28,7 @@
 #include <linux/input/sweep2wake.h>
 
 /* Tuneables */
-#define DEBUG                   1
+#define DEBUG                   0
 #define S2W_PWRKEY_DUR          60
 
 #ifdef CONFIG_MACH_MSM8974_HAMMERHEAD
