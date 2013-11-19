@@ -209,7 +209,18 @@ Optional properties:
 - qcom,mdss-highest-bank-bit: Property to indicate tile format as opposed to usual
 				linear format. The value tells the GPU highest memory
 				 bank bit used.
-
+- qcom,max-bandwidth-low-kbps:	This value indicates the max bandwidth in KB
+				that can be supported without underflow.
+				This is a low bandwidth threshold which should
+				be applied in most scenarios to be safe from
+				underflows when unable to satisfy bandwith
+				requirements.
+- qcom,max-bandwidth-high-kbps:	This value indicates the max bandwidth in KB
+				that can be supported without underflow.
+				This is a high bandwidth threshold which can be
+				applied in scenarios where panel interface can
+				be more tolerant to memory latency such as
+				command mode panels.
 Optional subnodes:
 Child nodes representing the frame buffer virtual devices.
 
@@ -264,6 +275,8 @@ Example:
 			<22 512 0 0>, <23 512 0 0>,
 			<22 512 0 6400000>, <23 512 0 6400000>,
 			<22 512 0 6400000>, <23 512 0 6400000>;
+		qcom,max-bandwidth-low-kbps = <2300000>;
+		qcom,max-bandwidth-high-kbps = <3000000>;
 
 		qcom,max-clk-rate = <320000000>;
 		qcom,vbif-settings = <0x0004 0x00000001>,

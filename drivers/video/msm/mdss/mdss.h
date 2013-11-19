@@ -120,6 +120,9 @@ struct mdss_data_type {
 
 	u32 rot_block_size;
 
+	u32 max_bw_low;
+	u32 max_bw_high;
+
 	u32 axi_port_cnt;
 	u32 curr_bw_uc_idx;
 	u32 bus_hdl;
