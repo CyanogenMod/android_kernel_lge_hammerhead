@@ -25,6 +25,9 @@
 #include <linux/debugfs.h>
 #include <linux/ctype.h>
 #endif
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+#include <linux/input/doubletap2wake.h>
+#endif
 
 #include <asm/system_info.h>
 
@@ -234,14 +237,24 @@ void mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 			mdss_panel_id == PANEL_LGE_JDI_ORISE_CMD ||
 			mdss_panel_id == PANEL_LGE_JDI_NOVATEK_VIDEO ||
 			mdss_panel_id == PANEL_LGE_JDI_NOVATEK_CMD) {
-			if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
-				gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
-			usleep(20 * 1000);
-			gpio_set_value((ctrl_pdata->rst_gpio), 0);
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+			if (dt2w_switch == 0)
+#endif
+			{
+				if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
+					gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
+				usleep(20 * 1000);
+				gpio_set_value((ctrl_pdata->rst_gpio), 0);
+			}
 		} else {
-			gpio_set_value((ctrl_pdata->rst_gpio), 0);
-			if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
-				gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+			if (dt2w_switch == 0)
+#endif
+			{
+				gpio_set_value((ctrl_pdata->rst_gpio), 0);
+				if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
+					gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
+			}
 		}
 	}
 }
@@ -377,6 +390,15 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 
 	if (!gpio_get_value(ctrl->disp_en_gpio))
 		return 0;
+
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+	if (dt2w_switch == 1) {
+		ctrl->off_cmds.cmds[1].payload[0] = 0x11;
+	} else {
+		ctrl->off_cmds.cmds[1].payload[0] = 0x10;
+	}
+	pr_info("[prevent_touchscreen_sleep]: payload = %x \n", ctrl->off_cmds.cmds[1].payload[0]);
+#endif
 
 	if (ctrl->off_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->off_cmds);

@@ -38,6 +38,10 @@
 
 #include "SynaImage_ds5.h"
 
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+#include <linux/input/doubletap2wake.h>
+#endif
+
 static struct workqueue_struct *synaptics_wq;
 
 /* RMI4 spec from 511-000405-01 Rev.D
@@ -169,6 +173,10 @@ static struct workqueue_struct *synaptics_wq;
 #define BYTES_PER_FINGER                8
 
 #define CHARGER_CONNECTED               0x20
+
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+#define SYNAPTICS_I2C_RETRY	10
+#endif
 
 static struct {
 	u8	finger_reg[MAX_FINGER][BYTES_PER_FINGER];
@@ -624,11 +632,25 @@ static int touch_i2c_read(struct i2c_client *client, u8 reg, int len, u8 *buf)
 		},
 	};
 
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+	int retry;
+	for (retry = 0; retry <= SYNAPTICS_I2C_RETRY; retry++) {
+		if (i2c_transfer(client->adapter, msgs, 2) == 2)
+			break;
+		if (retry == SYNAPTICS_I2C_RETRY) {
+			if (printk_ratelimit())
+				TOUCH_ERR_MSG("transfer error\n");
+			return -EIO;
+		} else
+			msleep(10);
+	}
+#else
 	if (i2c_transfer(client->adapter, msgs, 2) < 0) {
 		if (printk_ratelimit())
 			TOUCH_ERR_MSG("transfer error\n");
 		return -EIO;
 	}
+#endif
 
 	return 0;
 }
@@ -1670,15 +1692,33 @@ static int lcd_notifier_callback(struct notifier_block *this,
 				msecs_to_jiffies(70));
 		}
 		mutex_unlock(&ts->input_dev->mutex);
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+		if (dt2w_switch == 1)
+			disable_irq_wake(ts->client->irq);
+#endif
 		break;
 	case LCD_EVENT_OFF_START:
-		mutex_lock(&ts->input_dev->mutex);
-		if (!cancel_delayed_work_sync(&ts->work_init))
-			disable_irq(ts->client->irq);
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+		if (dt2w_switch == 0)
+#endif
+		{
+			mutex_lock(&ts->input_dev->mutex);
+			if (!cancel_delayed_work_sync(&ts->work_init))
+				disable_irq(ts->client->irq);
+		}
 		break;
 	case LCD_EVENT_OFF_END:
-		synaptics_ts_stop(ts);
-		mutex_unlock(&ts->input_dev->mutex);
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+		if (dt2w_switch == 0)
+#endif
+		{
+			synaptics_ts_stop(ts);
+			mutex_unlock(&ts->input_dev->mutex);
+		}
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+		if (dt2w_switch == 1)
+			enable_irq_wake(ts->client->irq);
+#endif
 		break;
 	default:
 		break;
@@ -1812,7 +1852,11 @@ static int synaptics_ts_probe(
 	gpio_direction_input(ts->pdata->irq_gpio);
 
 	ret = request_threaded_irq(client->irq, NULL, touch_irq_handler,
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+			IRQF_TRIGGER_FALLING | IRQF_ONESHOT | IRQF_NO_SUSPEND, client->name, ts);
+#else
 			IRQF_TRIGGER_FALLING | IRQF_ONESHOT, client->name, ts);
+#endif
 
 	if (ret < 0) {
 		TOUCH_ERR_MSG("request_irq failed. use polling mode\n");

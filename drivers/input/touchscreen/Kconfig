@@ -1031,4 +1031,11 @@ config TOUCHSCREEN_CHARGER_NOTIFY
 	  The touch firmware will use this information to decide whether
 	  a new algorithm to reduce the noise impact needs to be applied
 	  or not.
+
+config TOUCHSCREEN_DOUBLETAP2WAKE
+	bool "DoubleTap2Wake for touchscreens"
+	default n
+	help
+	  Enables double tap to wake for touchscreens.
+	  This causes significant battery drain.
 endif
