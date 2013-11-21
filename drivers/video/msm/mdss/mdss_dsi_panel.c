@@ -26,9 +26,12 @@
 #include <linux/ctype.h>
 #endif
 
+#include <asm/system_info.h>
+
 #include "mdss_dsi.h"
 
 #define DT_CMD_HDR 6
+#define GAMMA_COMPAT 11
 
 static bool mdss_panel_flip_ud = false;
 static int mdss_panel_id = PANEL_QCOM;
@@ -40,6 +43,11 @@ extern void lm3630_lcd_backlight_set_level(int level);
 #endif
 
 static struct mdss_dsi_phy_ctrl phy_params;
+static struct mdss_panel_common_pdata *local_pdata;
+static struct work_struct send_cmds_work;
+struct mdss_panel_data *cmds_panel_data;
+static struct platform_driver this_driver;
+static struct kobject *module_kobj;
 
 void mdss_dsi_panel_pwm_cfg(struct mdss_dsi_ctrl_pdata *ctrl)
 {
@@ -343,8 +351,8 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 
 	pr_debug("%s: ctrl=%p ndx=%d\n", __func__, ctrl, ctrl->ndx);
 
-	if (ctrl->on_cmds.cmd_cnt)
-		mdss_dsi_panel_cmds_send(ctrl, &ctrl->on_cmds);
+	if (local_pdata->on_cmds.cmd_cnt)
+		mdss_dsi_panel_cmds_send(ctrl, &local_pdata->on_cmds);
 
 	pr_info("%s\n", __func__);
 	return 0;
@@ -1116,11 +1124,194 @@ static int debug_fs_init(struct mdss_panel_common_pdata *panel_data)
 }
 #endif
 
+static int read_local_on_cmds(char *buf, size_t cmd)
+{
+	int i, len = 0;
+	int dlen;
+
+	if (system_rev != GAMMA_COMPAT) {
+		pr_err("Incompatible hardware revision: %d\n", system_rev);
+		return -EINVAL;
+	}
+
+	/* Skip last bit */
+	dlen = local_pdata->on_cmds.cmds[cmd].dchdr.dlen - 1;
+	if (!dlen)
+		return -ENOMEM;
+
+	/* Skip first bit */
+	for (i = 1; i < dlen; i++)
+		len += sprintf(buf + len, "%d ",
+			       local_pdata->on_cmds.cmds[cmd].payload[i]);
+
+	len += sprintf(buf + len, "\n");
+
+	return len;
+}
+
+static unsigned int cnt;
+
+static int write_local_on_cmds(struct device *dev, const char *buf,
+			       size_t cmd)
+{
+	int i, rc = 0;
+	int dlen;
+	unsigned int val;
+	char tmp[3];
+	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
+	struct mdss_panel_common_pdata *prev_local_data;
+
+	if (cnt) {
+		cnt = 0;
+		return -EINVAL;
+	}
+
+	if (system_rev != GAMMA_COMPAT) {
+		pr_err("Incompatible hardware revision: %d\n", system_rev);
+		return -EINVAL;
+	}
+
+	if (cmds_panel_data == NULL) {
+		pr_err("%s: Invalid input data\n", __func__);
+		return -EINVAL;
+	}
+
+	ctrl = container_of(cmds_panel_data, struct mdss_dsi_ctrl_pdata,
+			    panel_data);
+
+	/*
+	 * Last bit is not written because it's either fixed at 0x00 for
+	 * RGB or a duplicate of the previous bit for the white point.
+	 */
+	dlen = local_pdata->on_cmds.cmds[cmd].dchdr.dlen - 1;
+	if (!dlen)
+		return -EINVAL;
+
+	/* Backup previous panel data */
+	prev_local_data = local_pdata;
+
+	/* Skip first bit again */
+	for (i = 1; i < dlen; i++) {
+		rc = sscanf(buf, "%u", &val);
+		if (rc != 1)
+			return -EINVAL;
+
+		if (val > 255) {
+			pr_err("%s: Invalid input data %u (0-255)\n", __func__, val);
+			local_pdata = prev_local_data;
+			return -EINVAL;
+		}
+
+		local_pdata->on_cmds.cmds[cmd].payload[i] = val;
+		/*
+		 * Duplicate positive/negative polarities for both,
+		 * white point and RGB values.
+		 */
+		if (cmd == 5)
+			local_pdata->on_cmds.cmds[cmd].payload[i + 1] = val;
+		else
+			local_pdata->on_cmds.cmds[cmd + 2].payload[i] = val;
+
+		sscanf(buf, "%s", tmp);
+		buf += strlen(tmp) + 1;
+		cnt = strlen(tmp);
+	}
+
+	pr_info("%s\n", __func__);
+
+	return rc;
+}
+
+static void send_local_on_cmds(struct work_struct *work)
+{
+	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
+
+	if (cmds_panel_data == NULL) {
+		pr_err("%s: Invalid input data\n", __func__);
+		return;
+	}
+
+	ctrl = container_of(cmds_panel_data, struct mdss_dsi_ctrl_pdata,
+			    panel_data);
+
+	if (local_pdata->on_cmds.cmd_cnt)
+		mdss_dsi_panel_cmds_send(ctrl, &local_pdata->on_cmds);
+
+	pr_info("%s\n", __func__);
+}
+
+/************************** sysfs interface ************************/
+
+static ssize_t write_kgamma_send(struct device *dev,
+				 struct device_attribute *attr,
+				 const char *buf, size_t count)
+{
+	if (!cmds_panel_data->panel_info.panel_power_on) {
+		pr_err("%s: Panel off, failed to send commands\n", __func__);
+		return -EPERM;
+	}
+
+	schedule_work(&send_cmds_work);
+
+	return count;
+}
+
+static DEVICE_ATTR(kgamma_send, 0644, NULL, write_kgamma_send);
+
+#define read_one(file_name, cmd)				\
+static ssize_t read_##file_name					\
+(struct device *dev, struct device_attribute *attr, char *buf)  \
+{								\
+	return read_local_on_cmds(buf, cmd);			\
+}
+
+read_one(kgamma_w,  5);
+read_one(kgamma_r,  7);
+read_one(kgamma_g, 11);
+read_one(kgamma_b, 15);
+
+#define write_one(file_name, cmd)				\
+static ssize_t write_##file_name				\
+(struct device *dev, struct device_attribute *attr, 		\
+		const char *buf, size_t count)  		\
+{								\
+	return write_local_on_cmds(dev, buf, cmd);		\
+}
+
+write_one(kgamma_w,  5);
+write_one(kgamma_r,  7);
+write_one(kgamma_g, 11);
+write_one(kgamma_b, 15);
+
+#define define_one_rw(_name)					\
+static DEVICE_ATTR(_name, 0644, read_##_name, write_##_name);
+
+define_one_rw(kgamma_w);
+define_one_rw(kgamma_r);
+define_one_rw(kgamma_g);
+define_one_rw(kgamma_b);
+
+static struct attribute *dsi_panel_attributes[] = {
+	&dev_attr_kgamma_w.attr,
+	&dev_attr_kgamma_r.attr,
+	&dev_attr_kgamma_g.attr,
+	&dev_attr_kgamma_b.attr,
+	&dev_attr_kgamma_send.attr,
+	NULL
+};
+
+static struct attribute_group dsi_panel_attribute_group = {
+	.attrs = dsi_panel_attributes,
+};
+
+/**************************** sysfs end **************************/
+
 static int __devinit mdss_dsi_panel_probe(struct platform_device *pdev)
 {
 	int rc = 0;
 	static struct mdss_panel_common_pdata vendor_pdata;
 	static const char *panel_name;
+	const char *driver_name = this_driver.driver.name;
 	bool partial_update_enabled;
 
 	pr_debug("%s:%d, debug info id=%d", __func__, __LINE__, pdev->id);
@@ -1158,11 +1349,27 @@ static int __devinit mdss_dsi_panel_probe(struct platform_device *pdev)
 	if (rc)
 		return rc;
 
+	INIT_WORK(&send_cmds_work, send_local_on_cmds);
+
+	local_pdata = &vendor_pdata;
+	if (!local_pdata)
+		return -EINVAL;
+
 #ifdef CONFIG_DEBUG_FS
 	debug_fs_init(&vendor_pdata);
 #endif
 
-	return 0;
+	module_kobj = kobject_create_and_add(driver_name, &module_kset->kobj);
+	if (!module_kobj) {
+		pr_err("%s: kobject create failed\n", driver_name);
+		return -ENOMEM;
+	}
+
+	rc = sysfs_create_group(module_kobj, &dsi_panel_attribute_group);
+	if (rc)
+		pr_err("%s: sysfs create failed: %d\n", panel_name, rc);
+
+	return rc;
 }
 
 static const struct of_device_id mdss_dsi_panel_match[] = {
