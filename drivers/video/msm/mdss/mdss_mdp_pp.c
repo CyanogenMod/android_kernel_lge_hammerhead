@@ -1115,7 +1115,8 @@ static int pp_dspp_setup(u32 disp_num, struct mdss_mdp_mixer *mixer)
 		flags = 0;
 
 	mixer_cnt = mdss_mdp_get_ctl_mixers(disp_num, mixer_id);
-	if (dspp_num < mdata->nad_cfgs && (mixer_cnt != 2)) {
+	if (dspp_num < mdata->nad_cfgs && disp_num < mdata->nad_cfgs &&
+				(mixer_cnt != 2)) {
 		ret = mdss_mdp_ad_setup(ctl->mfd);
 		if (ret < 0)
 			pr_warn("ad_setup(dspp%d) returns %d", dspp_num, ret);
