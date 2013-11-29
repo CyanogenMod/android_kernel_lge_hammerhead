@@ -431,7 +431,7 @@ struct mdss_dsi_ctrl_pdata *mdss_dsi_ctrl_slave(
 irqreturn_t mdss_dsi_isr(int irq, void *ptr);
 void mdss_dsi_irq_handler_config(struct mdss_dsi_ctrl_pdata *ctrl_pdata);
 
-void mipi_set_tx_power_mode(int mode, struct mdss_panel_data *pdata);
+void mdss_dsi_set_tx_power_mode(int mode, struct mdss_panel_data *pdata);
 int mdss_dsi_clk_div_config(u8 bpp, u8 lanes,
 			    u32 *expected_dsi_pclk);
 int mdss_dsi_clk_init(struct platform_device *pdev,
