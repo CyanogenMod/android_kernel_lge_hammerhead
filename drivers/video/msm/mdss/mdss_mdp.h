@@ -149,8 +149,10 @@ enum mdss_mdp_wb_ctl_type {
 };
 
 struct mdss_mdp_perf_params {
-	u64 ib_quota;
-	u64 ab_quota;
+	u64 bw_overlap;
+	u64 bw_prefill;
+	u32 prefill_bytes;
+	u64 bw_ctl;
 	u32 mdp_clk_rate;
 };
 
@@ -177,6 +179,7 @@ struct mdss_mdp_ctl {
 	u32 dst_format;
 	bool is_secure;
 
+	int force_screen_state;
 	struct mdss_mdp_perf_params cur_perf;
 	struct mdss_mdp_perf_params new_perf;
 
