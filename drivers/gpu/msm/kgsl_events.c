@@ -58,8 +58,6 @@ static inline void _do_signal_event(struct kgsl_device *device,
 	list_del(&event->list);
 	kgsl_context_put(event->context);
 	kfree(event);
-
-	kgsl_active_count_put(device);
 }
 
 static void _retire_events(struct kgsl_device *device,
@@ -212,7 +210,6 @@ EXPORT_SYMBOL(kgsl_signal_events);
 int kgsl_add_event(struct kgsl_device *device, u32 id, u32 ts,
 	kgsl_event_func func, void *priv, void *owner)
 {
-	int ret;
 	struct kgsl_event *event;
 	unsigned int cur_ts;
 	struct kgsl_context *context = NULL;
@@ -260,17 +257,6 @@ int kgsl_add_event(struct kgsl_device *device, u32 id, u32 ts,
 	if (event == NULL) {
 		kgsl_context_put(context);
 		return -ENOMEM;
-	}
-
-	/*
-	 * Increase the active count on the device to avoid going into power
-	 * saving modes while events are pending
-	 */
-	ret = kgsl_active_count_get(device);
-	if (ret < 0) {
-		kgsl_context_put(context);
-		kfree(event);
-		return ret;
 	}
 
 	event->context = context;
@@ -387,19 +373,9 @@ void kgsl_process_events(struct work_struct *work)
 	struct kgsl_context *context, *tmp;
 	uint32_t timestamp;
 
-	/*
-	 * Bail unless the global timestamp has advanced.  We can safely do this
-	 * outside of the mutex for speed
-	 */
-
-	timestamp = kgsl_readtimestamp(device, NULL, KGSL_TIMESTAMP_RETIRED);
-	if (timestamp == device->events_last_timestamp)
-		return;
-
 	mutex_lock(&device->mutex);
 
-	device->events_last_timestamp = timestamp;
-
+	timestamp = kgsl_readtimestamp(device, NULL, KGSL_TIMESTAMP_RETIRED);
 	_retire_events(device, &device->events, timestamp);
 
 	/* Now process all of the pending contexts */
