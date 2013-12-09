@@ -77,6 +77,9 @@ static int set_timer_idx;
 static int msm_cpp_buffer_ops(struct cpp_device *cpp_dev,
 	uint32_t buff_mgr_ops, struct msm_buf_mngr_info *buff_mgr_info);
 
+static int msm_cpp_buffer_ops(struct cpp_device *cpp_dev,
+	uint32_t buff_mgr_ops, struct msm_buf_mngr_info *buff_mgr_info);
+
 #if CONFIG_MSM_CPP_DBG
 #define CPP_DBG(fmt, args...) pr_err(fmt, ##args)
 #else
