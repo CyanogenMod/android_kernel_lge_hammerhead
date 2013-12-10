@@ -82,6 +82,16 @@ struct mdss_debug_inf {
 	void (*debug_enable_clock)(int on);
 };
 
+struct mdss_prefill_data {
+	u32 ot_bytes;
+	u32 y_buf_bytes;
+	u32 y_scaler_lines_bilinear;
+	u32 y_scaler_lines_caf;
+	u32 post_scaler_pixels;
+	u32 pp_pixels;
+	u32 fbc_lines;
+};
+
 struct mdss_data_type {
 	u32 mdp_rev;
 	struct clk *mdp_clk[MDSS_MAX_CLK];
@@ -177,6 +187,7 @@ struct mdss_data_type {
 	bool ulps;
 
 	int handoff_pending;
+	struct mdss_prefill_data prefill_data;
 };
 extern struct mdss_data_type *mdss_res;
 
