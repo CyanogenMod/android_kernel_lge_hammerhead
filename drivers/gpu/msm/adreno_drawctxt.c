@@ -310,7 +310,7 @@ int adreno_drawctxt_wait_global(struct adreno_device *adreno_dev,
 	mutex_unlock(&device->mutex);
 
 	if (timeout) {
-		ret = (int) wait_event_timeout(drawctxt->waiting,
+		ret = (int) wait_event_interruptible_timeout(drawctxt->waiting,
 			_check_global_timestamp(device, timestamp),
 			msecs_to_jiffies(timeout));
 
@@ -319,7 +319,7 @@ int adreno_drawctxt_wait_global(struct adreno_device *adreno_dev,
 		else if (ret > 0)
 			ret = 0;
 	} else {
-		wait_event(drawctxt->waiting,
+		ret = (int) wait_event_interruptible(drawctxt->waiting,
 			_check_global_timestamp(device, timestamp));
 	}
 
@@ -345,6 +345,8 @@ void adreno_drawctxt_invalidate(struct kgsl_device *device,
 		struct kgsl_context *context)
 {
 	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
+
+	trace_adreno_drawctxt_invalidate(drawctxt);
 
 	drawctxt->state = ADRENO_CONTEXT_STATE_INVALID;
 
@@ -549,10 +551,9 @@ int adreno_drawctxt_detach(struct kgsl_context *context)
 			KGSL_MEMSTORE_OFFSET(context->id, eoptimestamp),
 			drawctxt->timestamp);
 
-	kgsl_sharedmem_free(&drawctxt->gpustate);
-	kgsl_sharedmem_free(&drawctxt->context_gmem_shadow.gmemshadow);
+	adreno_profile_process_results(device);
 
-	if (drawctxt->ops->detach)
+	if (drawctxt->ops && drawctxt->ops->detach)
 		drawctxt->ops->detach(drawctxt);
 
 	/* wake threads waiting to submit commands from this context */

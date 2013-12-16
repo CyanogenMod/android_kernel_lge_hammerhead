@@ -133,6 +133,8 @@ struct kgsl_functable {
 		enum kgsl_property_type type, void *value,
 		unsigned int sizebytes);
 	int (*postmortem_dump) (struct kgsl_device *device, int manual);
+	int (*next_event)(struct kgsl_device *device,
+		struct kgsl_event *event);
 	void (*drawctxt_sched)(struct kgsl_device *device,
 		struct kgsl_context *context);
 	void (*resume)(struct kgsl_device *device);
@@ -176,7 +178,6 @@ struct kgsl_event {
  * context should be invalidated
  * @refcount: kref structure to maintain the reference count
  * @synclist: List of context/timestamp tuples to wait for before issuing
- * @priority: Priority of the cmdbatch (inherited from the context)
  *
  * This struture defines an atomic batch of command buffers issued from
  * userspace.
@@ -196,7 +197,6 @@ struct kgsl_cmdbatch {
 	int invalid;
 	struct kref refcount;
 	struct list_head synclist;
-	int priority;
 };
 
 /**
@@ -280,14 +280,6 @@ struct kgsl_device {
 	 * dumped
 	 */
 	struct list_head snapshot_obj_list;
-	/* List of IB's to be dumped */
-	struct list_head snapshot_cp_list;
-	/* Work item that saves snapshot's frozen object data */
-	struct work_struct snapshot_obj_ws;
-	/* snapshot memory holding the hanging IB's objects in snapshot */
-	void *snapshot_cur_ib_objs;
-	/* Size of snapshot_cur_ib_objs */
-	int snapshot_cur_ib_objs_size;
 
 	/* Logging levels */
 	int cmd_log;
@@ -320,9 +312,6 @@ void kgsl_process_events(struct work_struct *work);
 			kgsl_idle_check),\
 	.ts_expired_ws  = __WORK_INITIALIZER((_dev).ts_expired_ws,\
 			kgsl_process_events),\
-	.snapshot_obj_ws = \
-		__WORK_INITIALIZER((_dev).snapshot_obj_ws,\
-		kgsl_snapshot_save_frozen_objs),\
 	.context_idr = IDR_INIT((_dev).context_idr),\
 	.events = LIST_HEAD_INIT((_dev).events),\
 	.events_pending_list = LIST_HEAD_INIT((_dev).events_pending_list), \
@@ -356,7 +345,7 @@ struct kgsl_process_private;
  * @events: list head of pending events for this context
  * @events_list: list node for the list of all contexts that have pending events
  * @pid: process that owns this context.
- * @pagefault: flag set if this context caused a pagefault.
+ * @tid: task that created this context.
  * @pagefault_ts: global timestamp of the pagefault, if KGSL_CONTEXT_PAGEFAULT
  * is set.
  * @flags: flags from userspace controlling the behavior of this context
@@ -365,6 +354,7 @@ struct kgsl_context {
 	struct kref refcount;
 	uint32_t id;
 	pid_t pid;
+	pid_t tid;
 	struct kgsl_device_private *dev_priv;
 	struct kgsl_process_private *proc_priv;
 	unsigned long priv;
@@ -536,7 +526,6 @@ const char *kgsl_pwrstate_to_str(unsigned int state);
 int kgsl_device_snapshot_init(struct kgsl_device *device);
 int kgsl_device_snapshot(struct kgsl_device *device, int hang);
 void kgsl_device_snapshot_close(struct kgsl_device *device);
-void kgsl_snapshot_save_frozen_objs(struct work_struct *work);
 
 static inline struct kgsl_device_platform_data *
 kgsl_device_get_drvdata(struct kgsl_device *dev)
@@ -731,35 +720,5 @@ static inline int kgsl_cmdbatch_sync_pending(struct kgsl_cmdbatch *cmdbatch)
 
 	return ret;
 }
-
-#if defined(CONFIG_GPU_TRACEPOINTS)
-
-#include <trace/events/gpu.h>
-
-static inline void kgsl_trace_gpu_job_enqueue(unsigned int ctxt_id,
-		unsigned int timestamp, const char *type)
-{
-	trace_gpu_job_enqueue(ctxt_id, timestamp, type);
-}
-
-static inline void kgsl_trace_gpu_sched_switch(const char *name,
-	u64 time, u32 ctxt_id, s32 prio, u32 timestamp)
-{
-	trace_gpu_sched_switch(name, time, ctxt_id, prio, timestamp);
-}
-
-#else
-
-static inline void kgsl_trace_gpu_job_enqueue(unsigned int ctxt_id,
-		unsigned int timestamp, const char *type)
-{
-}
-
-static inline void kgsl_trace_gpu_sched_switch(const char *name,
-	u64 time, u32 ctxt_id, s32 prio, u32 timestamp)
-{
-}
-
-#endif
 
 #endif  /* __KGSL_DEVICE_H */

@@ -23,7 +23,13 @@
 	{ KGSL_CONTEXT_TYPE_GL, "GL" }, \
 	{ KGSL_CONTEXT_TYPE_CL, "CL" }, \
 	{ KGSL_CONTEXT_TYPE_C2D, "C2D" }, \
-	{ KGSL_CONTEXT_TYPE_RS, "RS" }
+	{ KGSL_CONTEXT_TYPE_RS, "RS" }, \
+	{ KGSL_CONTEXT_TYPE_UNKNOWN, "UNKNOWN" }
+
+struct adreno_context_type {
+	unsigned int type;
+	const char *str;
+};
 
 #define ADRENO_CONTEXT_CMDQUEUE_SIZE 128
 

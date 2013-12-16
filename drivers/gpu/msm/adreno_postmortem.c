@@ -80,6 +80,8 @@ static const struct pm_id_name pm3_nop_values[] = {
 	{KGSL_CMD_INTERNAL_IDENTIFIER,		"CMD__INT"},
 	{KGSL_START_OF_IB_IDENTIFIER,		"IB_START"},
 	{KGSL_END_OF_IB_IDENTIFIER,		"IB___END"},
+	{KGSL_START_OF_PROFILE_IDENTIFIER,	"PRO_STRT"},
+	{KGSL_END_OF_PROFILE_IDENTIFIER,	"PRO__END"},
 };
 
 static uint32_t adreno_is_pm4_len(uint32_t word)
@@ -197,9 +199,8 @@ static void dump_ib(struct kgsl_device *device, char *buffId,
 	phys_addr_t pt_base, uint32_t base_offset, uint32_t ib_base,
 	uint32_t ib_size, bool dump)
 {
-	struct kgsl_mem_entry *ent = NULL;
 	uint8_t *base_addr = adreno_convertaddr(device, pt_base,
-		ib_base, ib_size*sizeof(uint32_t), &ent);
+		ib_base, ib_size*sizeof(uint32_t));
 
 	if (base_addr && dump)
 		print_hex_dump(KERN_ERR, buffId, DUMP_PREFIX_OFFSET,
@@ -209,10 +210,6 @@ static void dump_ib(struct kgsl_device *device, char *buffId,
 			"offset:%5.5X%s\n",
 			buffId, ib_base, ib_size*4, base_offset,
 			base_addr ? "" : " [Invalid]");
-	if (ent) {
-		kgsl_memdesc_unmap(&ent->memdesc);
-		kgsl_mem_entry_put(ent);
-	}
 }
 
 #define IB_LIST_SIZE	64
@@ -231,14 +228,13 @@ static void dump_ib1(struct kgsl_device *device, phys_addr_t pt_base,
 	int i, j;
 	uint32_t value;
 	uint32_t *ib1_addr;
-	struct kgsl_mem_entry *ent = NULL;
 
 	dump_ib(device, "IB1:", pt_base, base_offset, ib1_base,
 		ib1_size, dump);
 
 	/* fetch virtual address for given IB base */
 	ib1_addr = (uint32_t *)adreno_convertaddr(device, pt_base,
-		ib1_base, ib1_size*sizeof(uint32_t), &ent);
+		ib1_base, ib1_size*sizeof(uint32_t));
 	if (!ib1_addr)
 		return;
 
@@ -264,10 +260,6 @@ static void dump_ib1(struct kgsl_device *device, phys_addr_t pt_base,
 			ib_list->offsets[ib_list->count] = i<<2;
 			++ib_list->count;
 		}
-	}
-	if (ent) {
-		kgsl_memdesc_unmap(&ent->memdesc);
-		kgsl_mem_entry_put(ent);
 	}
 }
 
