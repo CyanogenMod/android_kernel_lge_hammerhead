@@ -167,8 +167,13 @@ struct current_limit_entry {
 };
 
 static struct current_limit_entry adap_tbl[] = {
+#ifdef CONFIG_FORCE_FAST_CHARGE
+	{1500, 1280},
+	{2000, 1696},
+#else
 	{1200, 1024},
 	{2000, 1536},
+#endif
 };
 
 static int bq24192_step_down_detect_disable(struct bq24192_chip *chip);
