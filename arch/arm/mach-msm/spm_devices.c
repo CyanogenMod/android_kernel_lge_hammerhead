@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -353,7 +353,7 @@ static int __devinit msm_spm_dev_probe(struct platform_device *pdev)
 	char *key = NULL;
 	uint32_t val = 0;
 	struct msm_spm_seq_entry modes[MSM_SPM_MODE_NR];
-	size_t len = 0;
+	int len = 0;
 	struct msm_spm_device *dev = NULL;
 	struct resource *res = NULL;
 	uint32_t mode_count = 0;
