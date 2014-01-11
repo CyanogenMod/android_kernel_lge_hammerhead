@@ -1981,8 +1981,12 @@ static struct hdmi_pll_vco_clk hdmi_vco_clk = {
 	},
 };
 
-static struct div_clk hdmipll_div1_clk = {
-	.div = 1,
+struct div_clk hdmipll_div1_clk = {
+	.data = {
+		.div = 1,
+		.min_div = 1,
+		.max_div = 1,
+	},
 	.c = {
 		.parent = &hdmi_vco_clk.c,
 		.dbg_name = "hdmipll_div1_clk",
@@ -1992,8 +1996,12 @@ static struct div_clk hdmipll_div1_clk = {
 	},
 };
 
-static struct div_clk hdmipll_div2_clk = {
-	.div = 2,
+struct div_clk hdmipll_div2_clk = {
+	.data = {
+		.div = 2,
+		.min_div = 2,
+		.max_div = 2,
+	},
 	.c = {
 		.parent = &hdmi_vco_clk.c,
 		.dbg_name = "hdmipll_div2_clk",
@@ -2003,8 +2011,12 @@ static struct div_clk hdmipll_div2_clk = {
 	},
 };
 
-static struct div_clk hdmipll_div4_clk = {
-	.div = 4,
+struct div_clk hdmipll_div4_clk = {
+	.data = {
+		.div = 4,
+		.min_div = 4,
+		.max_div = 4,
+	},
 	.c = {
 		.parent = &hdmi_vco_clk.c,
 		.dbg_name = "hdmipll_div4_clk",
@@ -2014,8 +2026,12 @@ static struct div_clk hdmipll_div4_clk = {
 	},
 };
 
-static struct div_clk hdmipll_div6_clk = {
-	.div = 6,
+struct div_clk hdmipll_div6_clk = {
+	.data = {
+		.div = 6,
+		.min_div = 6,
+		.max_div = 6,
+	},
 	.c = {
 		.parent = &hdmi_vco_clk.c,
 		.dbg_name = "hdmipll_div6_clk",
@@ -2100,7 +2116,11 @@ static struct mux_clk hdmipll_mux_clk = {
 };
 
 struct div_clk hdmipll_clk_src = {
-	.div = 5,
+	.data = {
+		.div = 5,
+		.min_div = 5,
+		.max_div = 5,
+	},
 	.c = {
 		.parent = &hdmipll_mux_clk.c,
 		.dbg_name = "hdmipll_clk_src",
