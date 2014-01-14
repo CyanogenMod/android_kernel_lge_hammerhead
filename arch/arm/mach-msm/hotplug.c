@@ -11,7 +11,6 @@
 #include <linux/errno.h>
 #include <linux/smp.h>
 #include <linux/cpu.h>
-#include <linux/ratelimit.h>
 
 #include <asm/cacheflush.h>
 #include <asm/smp_plat.h>
@@ -25,9 +24,16 @@
 
 extern volatile int pen_release;
 
+struct msm_hotplug_device {
+	struct completion cpu_killed;
+	unsigned int warm_boot;
+};
+
+
 static cpumask_t cpu_dying_mask;
 
-static DEFINE_PER_CPU(unsigned int, warm_boot_flag);
+static DEFINE_PER_CPU_SHARED_ALIGNED(struct msm_hotplug_device,
+			msm_hotplug_devices);
 
 static inline void cpu_enter_lowpower(void)
 {
@@ -89,6 +95,7 @@ void platform_cpu_die(unsigned int cpu)
 			__func__, smp_processor_id(), cpu);
 		BUG();
 	}
+	complete(&__get_cpu_var(msm_hotplug_devices).cpu_killed);
 	/*
 	 * we're ready for shutdown now, so do it
 	 */
@@ -151,36 +158,14 @@ static struct notifier_block hotplug_rtb_notifier = {
 	.notifier_call = hotplug_rtb_callback,
 };
 
-static int hotplug_cpu_check_callback(struct notifier_block *nfb,
-				      unsigned long action, void *hcpu)
-{
-	int cpu = (int)hcpu;
-
-	switch (action & (~CPU_TASKS_FROZEN)) {
-	case CPU_DOWN_PREPARE:
-		if (cpu == 0) {
-			pr_err_ratelimited("CPU0 hotplug is not supported\n");
-			return NOTIFY_BAD;
-		}
-		break;
-	default:
-		break;
-	}
-
-	return NOTIFY_OK;
-}
-static struct notifier_block hotplug_cpu_check_notifier = {
-	.notifier_call = hotplug_cpu_check_callback,
-	.priority = INT_MAX,
-};
-
 int msm_platform_secondary_init(unsigned int cpu)
 {
 	int ret;
-	unsigned int *warm_boot = &__get_cpu_var(warm_boot_flag);
+	struct msm_hotplug_device *dev = &__get_cpu_var(msm_hotplug_devices);
 
-	if (!(*warm_boot)) {
-		*warm_boot = 1;
+	if (!dev->warm_boot) {
+		dev->warm_boot = 1;
+		init_completion(&dev->cpu_killed);
 		return 0;
 	}
 	msm_jtag_restore_state();
@@ -194,12 +179,9 @@ int msm_platform_secondary_init(unsigned int cpu)
 
 static int __init init_hotplug(void)
 {
-	int rc;
 
-	rc = register_hotcpu_notifier(&hotplug_rtb_notifier);
-	if (rc)
-		return rc;
-
-	return register_hotcpu_notifier(&hotplug_cpu_check_notifier);
+	struct msm_hotplug_device *dev = &__get_cpu_var(msm_hotplug_devices);
+	init_completion(&dev->cpu_killed);
+	return register_hotcpu_notifier(&hotplug_rtb_notifier);
 }
 early_initcall(init_hotplug);

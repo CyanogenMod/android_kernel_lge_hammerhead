@@ -11,7 +11,6 @@
  *
  */
 
-#include <linux/dma-mapping.h>
 #include <linux/debugfs.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -31,6 +30,7 @@
 #include <linux/of_platform.h>
 #include <linux/regulator/krait-regulator.h>
 #include <linux/cpu.h>
+#include <linux/clk.h>
 #include <mach/msm_iomap.h>
 #include <mach/socinfo.h>
 #include <mach/system.h>
@@ -133,6 +133,7 @@ static bool msm_pm_retention_calls_tz;
 static bool msm_no_ramp_down_pc;
 static struct msm_pm_sleep_status_data *msm_pm_slp_sts;
 static bool msm_pm_pc_reset_timer;
+static struct clk *pnoc_clk;
 
 static int msm_pm_get_pc_mode(struct device_node *node,
 		const char *key, uint32_t *pc_mode_val)
@@ -480,7 +481,6 @@ static bool __ref msm_pm_spm_power_collapse(
 	bool collapsed = 0;
 	int ret;
 	unsigned int saved_gic_cpu_ctrl;
-	bool save_cpu_regs = !cpu || from_idle;
 
 	saved_gic_cpu_ctrl = readl_relaxed(MSM_QGIC_CPU_BASE + GIC_CPU_CTRL);
 	mb();
@@ -496,8 +496,8 @@ static bool __ref msm_pm_spm_power_collapse(
 			MSM_SPM_MODE_POWER_COLLAPSE, notify_rpm);
 	WARN_ON(ret);
 
-	entry = save_cpu_regs ?  msm_pm_collapse_exit : msm_secondary_startup;
-
+	entry = (!cpu || from_idle) ?
+		msm_pm_collapse_exit : msm_secondary_startup;
 	msm_pm_boot_config_before_pc(cpu, virt_to_phys(entry));
 
 	if (MSM_PM_DEBUG_RESET_VECTOR & msm_pm_debug_mask)
@@ -509,7 +509,7 @@ static bool __ref msm_pm_spm_power_collapse(
 #ifdef CONFIG_VFP
 	vfp_pm_suspend();
 #endif
-	collapsed = save_cpu_regs ? msm_pm_collapse() : msm_pm_pc_hotplug();
+	collapsed = msm_pm_collapse();
 
 	if (from_idle && msm_pm_pc_reset_timer)
 		clockevents_notify(CLOCK_EVT_NOTIFY_BROADCAST_EXIT, &cpu);
@@ -986,7 +986,7 @@ int msm_pm_wait_cpu_shutdown(unsigned int cpu)
 		if (acc_sts & msm_pm_slp_sts[cpu].mask)
 			return 0;
 		udelay(100);
-		WARN(++timeout == 20, "CPU%u didn't collape within 2ms\n",
+		WARN(++timeout == 10, "CPU%u didn't collape within 1ms\n",
 					cpu);
 	}
 
@@ -1152,12 +1152,18 @@ void msm_pm_set_sleep_ops(struct msm_pm_sleep_ops *ops)
 
 int msm_suspend_prepare(void)
 {
+	if (pnoc_clk != NULL)
+		clk_disable_unprepare(pnoc_clk);
+
 	suspend_time = msm_pm_timer_enter_suspend(&suspend_period);
 	return 0;
 }
 
 void msm_suspend_wake(void)
 {
+	if (pnoc_clk != NULL)
+		clk_prepare_enable(pnoc_clk);
+
 	if (suspend_power_collapsed) {
 		suspend_time = msm_pm_timer_exit_suspend(suspend_time,
 				suspend_period);
@@ -1173,6 +1179,8 @@ void msm_suspend_wake(void)
 static const struct platform_suspend_ops msm_pm_ops = {
 	.enter = msm_pm_enter,
 	.valid = suspend_valid_only_mem,
+	.prepare_late = msm_suspend_prepare,
+	.wake = msm_suspend_wake,
 };
 
 static int __devinit msm_pm_snoc_client_probe(struct platform_device *pdev)
@@ -1313,7 +1321,6 @@ static int __init msm_pm_setup_saved_state(void)
 	pmd_t *pmd;
 	unsigned long pmdval;
 	unsigned long exit_phys;
-	dma_addr_t temp_phys;
 
 	/* Page table for cores to come back up safely. */
 	pc_pgd = pgd_alloc(&init_mm);
@@ -1329,20 +1336,16 @@ static int __init msm_pm_setup_saved_state(void)
 	pmd[0] = __pmd(pmdval);
 	pmd[1] = __pmd(pmdval + (1 << (PGDIR_SHIFT - 1)));
 
-	msm_saved_state = dma_zalloc_coherent(NULL, CPU_SAVED_STATE_SIZE *
-						num_possible_cpus(),
-						&temp_phys, 0);
-
+	msm_saved_state_phys =
+		allocate_contiguous_ebi_nomap(CPU_SAVED_STATE_SIZE *
+					      num_possible_cpus(), 4);
+	if (!msm_saved_state_phys)
+		return -ENOMEM;
+	msm_saved_state = ioremap_nocache(msm_saved_state_phys,
+					  CPU_SAVED_STATE_SIZE *
+					  num_possible_cpus());
 	if (!msm_saved_state)
 		return -ENOMEM;
-
-	/*
-	 * Explicitly cast here since msm_saved_state_phys is defined
-	 * in assembly and we want to avoid any kind of truncation
-	 * or endian problems.
-	 */
-	msm_saved_state_phys = (unsigned long)temp_phys;
-
 
 	/* It is remotely possible that the code in msm_pm_collapse_exit()
 	 * which turns on the MMU with this mapping is in the
@@ -1358,7 +1361,7 @@ static int __init msm_pm_setup_saved_state(void)
 
 	return 0;
 }
-arch_initcall(msm_pm_setup_saved_state);
+core_initcall(msm_pm_setup_saved_state);
 
 static void setup_broadcast_timer(void *arg)
 {
@@ -1658,6 +1661,18 @@ static int __init msm_pm_8x60_init(void)
 		pr_err("%s(): failed to register driver %s\n", __func__,
 				msm_cpu_pm_snoc_client_driver.driver.name);
 		return rc;
+	}
+
+	pnoc_clk = clk_get_sys("pm_8x60", "bus_clk");
+
+	if (IS_ERR(pnoc_clk))
+		pnoc_clk = NULL;
+	else {
+		clk_set_rate(pnoc_clk, 19200000);
+		rc = clk_prepare_enable(pnoc_clk);
+
+		if (rc)
+			pr_err("%s: PNOC clock enable failed\n", __func__);
 	}
 
 	return platform_driver_register(&msm_pm_8x60_driver);

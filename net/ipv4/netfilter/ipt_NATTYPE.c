@@ -59,15 +59,13 @@ struct ipt_nattype {
 	struct list_head list;
 	struct timer_list timeout;
 	unsigned long timeout_value;
-	unsigned int nattype_cookie;
+	unsigned char is_valid;
 	unsigned short proto;		/* Protocol: TCP or UDP */
 	struct nf_nat_ipv4_range range;	/* LAN side source information */
 	unsigned short nat_port;	/* Routed NAT port */
 	unsigned int dest_addr;	/* Original egress packets destination addr */
 	unsigned short dest_port;/* Original egress packets destination port */
 };
-
-#define NATTYPE_COOKIE 0x11abcdef
 
 /*
  * TODO: It might be better to use a hash table for performance in
@@ -111,7 +109,7 @@ bool nattype_refresh_timer(unsigned long nat_type, unsigned long timeout_value)
 	if (!nte)
 		return false;
 	spin_lock_bh(&nattype_lock);
-	if (nte->nattype_cookie != NATTYPE_COOKIE) {
+	if (!nte->is_valid) {
 		spin_unlock_bh(&nattype_lock);
 		return false;
 	}
@@ -485,7 +483,7 @@ static unsigned int nattype_forward(struct sk_buff *skb,
 	add_timer(&nte->timeout);
 	list_add(&nte->list, &nattype_list);
 	ct->nattype_entry = (unsigned long)nte;
-	nte->nattype_cookie = NATTYPE_COOKIE;
+	nte->is_valid = 1;
 	spin_unlock_bh(&nattype_lock);
 	nattype_nte_debug_print(nte, "ADD");
 	return XT_CONTINUE;

@@ -26,7 +26,6 @@
 
 int msm_arch_idle(void);
 int msm_pm_collapse(void);
-int msm_pm_pc_hotplug(void);
 void msm_pm_collapse_exit(void);
 extern void *msm_saved_state;
 extern void (*msm_pm_disable_l2_fn)(void);
