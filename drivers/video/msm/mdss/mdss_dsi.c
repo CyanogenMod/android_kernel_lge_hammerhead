@@ -1266,6 +1266,8 @@ int dsi_panel_device_register(struct platform_device *pdev,
 		ctrl_pdata->ndx = 1;
 	}
 
+	ctrl_pdata->partial_update_fnc = panel_data->partial_update_fnc;
+
 	pr_debug("%s: Panal data initialized\n", __func__);
 	return 0;
 }

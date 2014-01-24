@@ -1142,6 +1142,18 @@ static int __devinit mdss_dsi_panel_probe(struct platform_device *pdev)
 	vendor_pdata.off = mdss_dsi_panel_off;
 	vendor_pdata.bl_fnc = mdss_dsi_panel_bl_ctrl;
 
+	partial_update_enabled = of_property_read_bool(pdev->dev.of_node,
+						"qcom,partial-update-enabled");
+	if (partial_update_enabled) {
+		pr_info("%s:%d Partial update enabled.\n", __func__, __LINE__);
+		vendor_pdata.panel_info.partial_update_enabled = 1;
+		vendor_pdata.partial_update_fnc = mdss_dsi_panel_partial_update;
+	} else {
+		pr_info("%s:%d Partial update disabled.\n", __func__, __LINE__);
+		vendor_pdata.panel_info.partial_update_enabled = 0;
+		vendor_pdata.partial_update_fnc = NULL;
+	}
+
 	rc = dsi_panel_device_register(pdev, &vendor_pdata);
 	if (rc)
 		return rc;
@@ -1149,18 +1161,6 @@ static int __devinit mdss_dsi_panel_probe(struct platform_device *pdev)
 #ifdef CONFIG_DEBUG_FS
 	debug_fs_init(&vendor_pdata);
 #endif
-
-	partial_update_enabled = of_property_read_bool(node,
-						"qcom,partial-update-enabled");
-	if (partial_update_enabled) {
-		pr_info("%s:%d Partial update enabled.\n", __func__, __LINE__);
-		ctrl_pdata->panel_data.panel_info.partial_update_enabled = 1;
-		ctrl_pdata->partial_update_fnc = mdss_dsi_panel_partial_update;
-	} else {
-		pr_info("%s:%d Partial update disabled.\n", __func__, __LINE__);
-		ctrl_pdata->panel_data.panel_info.partial_update_enabled = 0;
-		ctrl_pdata->partial_update_fnc = NULL;
-	}
 
 	return 0;
 }
