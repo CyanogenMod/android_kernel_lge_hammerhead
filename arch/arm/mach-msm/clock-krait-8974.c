@@ -577,7 +577,7 @@ static void krait_update_uv(int *uv, int num, int boost_uv)
 	case 0x511F04D1: /* KR28M2A21 */
 	case 0x510F06F0: /* KR28M4A10 */
 		for (i = 0; i < num; i++)
-			uv[i] = max(1150000, uv[i]);
+			uv[i] = max(1200000, uv[i]);
 	};
 
 	if (enable_boost) {
@@ -592,7 +592,7 @@ static unsigned int pvs_config_ver;
 module_param(pvs_config_ver, uint, S_IRUGO);
 
 #ifdef CONFIG_MSM_CPU_VOLTAGE_CONTROL
-#define CPU_VDD_MAX	1150
+#define CPU_VDD_MAX	1200
 #define CPU_VDD_MIN	675
 
 extern int use_for_scaling(unsigned int freq);
