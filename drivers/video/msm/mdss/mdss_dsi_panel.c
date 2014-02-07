@@ -173,9 +173,38 @@ static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
 }
 
+static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
+{
+	int rc = 0;
+
+	if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
+		rc = gpio_request(ctrl_pdata->disp_en_gpio,
+						"disp_enable");
+		if (rc) {
+			pr_err("request disp_en gpio failed, rc=%d\n",
+				       rc);
+			goto disp_en_gpio_err;
+		}
+	}
+	rc = gpio_request(ctrl_pdata->rst_gpio, "disp_rst_n");
+	if (rc) {
+		pr_err("request reset gpio failed, rc=%d\n",
+			rc);
+		goto rst_gpio_err;
+	}
+	return rc;
+
+rst_gpio_err:
+	if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
+		gpio_free(ctrl_pdata->disp_en_gpio);
+disp_en_gpio_err:
+	return rc;
+}
+
 int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
+	struct mdss_panel_info *pinfo = NULL;
 	int rc = 0;
 
 	if (pdata == NULL) {
@@ -198,30 +227,38 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 	}
 
 	pr_debug("%s: enable = %d\n", __func__, enable);
+	pinfo = &(ctrl_pdata->panel_data.panel_info);
 
 	if (enable) {
-		if (mdss_panel_id == PANEL_LGE_JDI_ORISE_VIDEO ||
-			mdss_panel_id == PANEL_LGE_JDI_ORISE_CMD ||
-			mdss_panel_id == PANEL_LGE_JDI_NOVATEK_VIDEO ||
-			mdss_panel_id == PANEL_LGE_JDI_NOVATEK_CMD) {
-			if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
-				gpio_set_value((ctrl_pdata->disp_en_gpio), 1);
-			usleep(20 * 1000);
-			gpio_set_value((ctrl_pdata->rst_gpio), 1);
-			usleep(15 * 1000);
-			gpio_set_value((ctrl_pdata->rst_gpio), 0);
-			udelay(20);
-			gpio_set_value((ctrl_pdata->rst_gpio), 1);
-			usleep(10 * 1000);
-		} else {
-			gpio_set_value((ctrl_pdata->rst_gpio), 1);
-			msleep(20);
-			gpio_set_value((ctrl_pdata->rst_gpio), 0);
-			udelay(200);
-			gpio_set_value((ctrl_pdata->rst_gpio), 1);
-			msleep(20);
-			if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
-				gpio_set_value((ctrl_pdata->disp_en_gpio), 1);
+		rc = mdss_dsi_request_gpios(ctrl_pdata);
+		if (rc) {
+			pr_err("gpio request failed\n");
+			return rc;
+		}
+		if (!pinfo->panel_power_on) {
+			if (mdss_panel_id == PANEL_LGE_JDI_ORISE_VIDEO ||
+				mdss_panel_id == PANEL_LGE_JDI_ORISE_CMD ||
+				mdss_panel_id == PANEL_LGE_JDI_NOVATEK_VIDEO ||
+				mdss_panel_id == PANEL_LGE_JDI_NOVATEK_CMD) {
+				if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
+					gpio_set_value((ctrl_pdata->disp_en_gpio), 1);
+				usleep(20 * 1000);
+				gpio_set_value((ctrl_pdata->rst_gpio), 1);
+				usleep(15 * 1000);
+				gpio_set_value((ctrl_pdata->rst_gpio), 0);
+				udelay(20);
+				gpio_set_value((ctrl_pdata->rst_gpio), 1);
+				usleep(10 * 1000);
+			} else {
+				gpio_set_value((ctrl_pdata->rst_gpio), 1);
+				msleep(20);
+				gpio_set_value((ctrl_pdata->rst_gpio), 0);
+				udelay(200);
+				gpio_set_value((ctrl_pdata->rst_gpio), 1);
+				msleep(20);
+				if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
+					gpio_set_value((ctrl_pdata->disp_en_gpio), 1);
+			}
 		}
 		if (ctrl_pdata->ctrl_state & CTRL_STATE_PANEL_INIT) {
 			pr_debug("%s: Panel Not properly turned OFF\n",
@@ -234,14 +271,20 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 			mdss_panel_id == PANEL_LGE_JDI_ORISE_CMD ||
 			mdss_panel_id == PANEL_LGE_JDI_NOVATEK_VIDEO ||
 			mdss_panel_id == PANEL_LGE_JDI_NOVATEK_CMD) {
-			if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
+			if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
 				gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
+				gpio_free(ctrl_pdata->disp_en_gpio);
+			}
 			usleep(20 * 1000);
 			gpio_set_value((ctrl_pdata->rst_gpio), 0);
+			gpio_free(ctrl_pdata->rst_gpio);
 		} else {
 			gpio_set_value((ctrl_pdata->rst_gpio), 0);
-			if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
+			gpio_free(ctrl_pdata->rst_gpio);
+			if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
 				gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
+				gpio_free(ctrl_pdata->disp_en_gpio);
+			}
 		}
 	}
 	return rc;
