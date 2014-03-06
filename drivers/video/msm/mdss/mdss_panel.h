@@ -332,6 +332,11 @@ struct mdss_panel_info {
 
 	bool ulps_feature_enabled;
 
+	u32 xstart_pix_align;
+	u32 width_pix_align;
+	u32 ystart_pix_align;
+	u32 height_pix_align;
+
 	u32 cont_splash_enabled;
 	u32 partial_update_enabled;
 	struct ion_handle *splash_ihdl;

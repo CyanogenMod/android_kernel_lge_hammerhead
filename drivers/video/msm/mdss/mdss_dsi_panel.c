@@ -700,6 +700,35 @@ static void mdss_panel_parse_te_params(struct device_node *np,
 	panel_info->te.refx100 = (!rc ? tmp : 6000);
 }
 
+static void mdss_dsi_parse_roi_alignment(struct device_node *np,
+		struct mdss_panel_info *pinfo)
+{
+	int len = 0;
+	u32 value[4];
+	struct property *data;
+	data = of_find_property(np, "qcom,panel-roi-alignment", &len);
+	len /= sizeof(u32);
+	if (!data || (len != 4)) {
+		pr_debug("%s: Panel roi alignment not found", __func__);
+	} else {
+		int rc = of_property_read_u32_array(np,
+				"qcom,panel-roi-alignment", value, len);
+		if (rc)
+			pr_debug("%s: Error reading panel roi alignment values",
+					__func__);
+		else {
+			pinfo->xstart_pix_align = value[0];
+			pinfo->width_pix_align = value[1];
+			pinfo->ystart_pix_align = value[2];
+			pinfo->height_pix_align = value[3];
+		}
+
+		pr_debug("%s: coordinate rules: [%d, %d, %d, %d]", __func__,
+			pinfo->xstart_pix_align, pinfo->width_pix_align,
+			pinfo->ystart_pix_align, pinfo->height_pix_align);
+	}
+}
+
 static int mdss_panel_parse_dt(struct device_node *np,
 			       struct mdss_panel_common_pdata *panel_data)
 {
@@ -942,7 +971,8 @@ static int mdss_panel_parse_dt(struct device_node *np,
 
 	pinfo->mipi.dsi_phy_db = &phy_params;
 
-	mdss_dsi_parse_fbc_params(np, &panel_data->panel_info);
+	mdss_dsi_parse_fbc_params(np, pinfo);
+	mdss_dsi_parse_roi_alignment(np, pinfo);
 
 	pinfo->mipi.last_line_interleave_en = of_property_read_bool(np,
 		"qcom,mdss-dsi-last-line-interleave");
