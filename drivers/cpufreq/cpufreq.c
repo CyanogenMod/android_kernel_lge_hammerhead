@@ -49,6 +49,9 @@ static DEFINE_PER_CPU(struct cpufreq_cpu_save_data, cpufreq_policy_save);
 #endif
 static DEFINE_SPINLOCK(cpufreq_driver_lock);
 
+static struct kset *cpufreq_kset;
+static struct kset *cpudev_kset;
+
 /*
  * cpu_policy_rwsem is a per CPU reader-writer semaphore designed to cure
  * all cpufreq/hotplug/workqueue/etc related lock issues.
@@ -860,6 +863,19 @@ static int cpufreq_add_dev_symlink(unsigned int cpu,
 	return ret;
 }
 
+static const char *kset_name(struct kset *kset, struct kobject *kobj)
+{
+	return kobj->name;
+}
+
+static struct kset_uevent_ops cpufreq_uevent_ops = {
+	.name = kset_name,
+};
+
+static struct kset_uevent_ops cpudev_uevent_ops = {
+	.name = kset_name,
+};
+
 static int cpufreq_add_dev_interface(unsigned int cpu,
 				     struct cpufreq_policy *policy,
 				     struct device *dev)
@@ -869,12 +885,27 @@ static int cpufreq_add_dev_interface(unsigned int cpu,
 	unsigned long flags;
 	int ret = 0;
 	unsigned int j;
+	char *envp[2];
+	char buf[64];
 
 	/* prepare interface data */
 	ret = kobject_init_and_add(&policy->kobj, &ktype_cpufreq,
 				   &dev->kobj, "cpufreq");
 	if (ret)
 		return ret;
+
+	/* create cpu device kset */
+	if (!cpudev_kset) {
+		cpudev_kset = kset_create_and_add("cpudev_kset", &cpudev_uevent_ops, NULL);
+		BUG_ON(!cpudev_kset);
+		dev->kobj.kset = cpudev_kset;
+	}
+
+	/* send uevent when cpu device is added */
+	snprintf(buf, sizeof(buf), "CPU=%u", policy->cpu);
+	envp[0] = buf;
+	envp[1] = NULL;
+	kobject_uevent_env(&dev->kobj, KOBJ_ADD, envp);
 
 	/* set up files for this cpu device */
 	drv_attr = cpufreq_driver->attr;
@@ -2017,6 +2048,12 @@ static int __init cpufreq_core_init(void)
 
 	cpufreq_global_kobject = kobject_create_and_add("cpufreq", &cpu_subsys.dev_root->kobj);
 	BUG_ON(!cpufreq_global_kobject);
+
+	/* create cpufreq kset */
+	cpufreq_kset = kset_create_and_add("cpufreq_kset", &cpufreq_uevent_ops, NULL);
+	BUG_ON(!cpufreq_kset);
+	cpufreq_global_kobject->kset = cpufreq_kset;
+
 	register_syscore_ops(&cpufreq_syscore_ops);
 
 	return 0;
