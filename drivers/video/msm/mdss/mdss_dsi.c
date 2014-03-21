@@ -1391,11 +1391,15 @@ int dsi_panel_device_register(struct device_node *pan_node,
 	pinfo->mipi.dsi_phy_db.strength[0] = data[0];
 	pinfo->mipi.dsi_phy_db.strength[1] = data[1];
 
+	pinfo->mipi.dsi_phy_db.reg_ldo_mode = of_property_read_bool(
+		ctrl_pdev->dev.of_node, "qcom,regulator-ldo-mode");
+
 	data = of_get_property(pan_node,
 		"qcom,mdss-dsi-regulator-settings", &len);
 	if (!data)
 		data = of_get_property(ctrl_pdev->dev.of_node,
 			"qcom,platform-regulator-settings", &len);
+
 	if ((!data) || (len != 7)) {
 		pr_err("%s:%d, Unable to read Phy regulator settings",
 			__func__, __LINE__);
