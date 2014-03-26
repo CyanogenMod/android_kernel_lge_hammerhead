@@ -206,6 +206,7 @@ struct mdss_mdp_ctl {
 	struct work_struct remove_underrun_handler;
 
 	struct mdss_mdp_img_rect roi;
+	struct mdss_mdp_img_rect roi_bkup;
 	u8 roi_changed;
 
 	int (*start_fnc) (struct mdss_mdp_ctl *ctl);
