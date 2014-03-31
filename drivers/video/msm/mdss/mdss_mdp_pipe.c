@@ -39,7 +39,7 @@
 static DEFINE_MUTEX(mdss_mdp_sspp_lock);
 static DEFINE_MUTEX(mdss_mdp_smp_lock);
 
-static int mdss_mdp_pipe_free(struct mdss_mdp_pipe *pipe);
+static void mdss_mdp_pipe_free(struct kref *kref);
 static int mdss_mdp_smp_mmb_set(int client_id, unsigned long *smp);
 static void mdss_mdp_smp_mmb_free(unsigned long *smp, bool write);
 static struct mdss_mdp_pipe *mdss_mdp_pipe_search_by_client_id(
@@ -476,21 +476,17 @@ int mdss_mdp_smp_handoff(struct mdss_data_type *mdata)
 
 void mdss_mdp_pipe_unmap(struct mdss_mdp_pipe *pipe)
 {
-	int tmp;
-
-	tmp = atomic_dec_return(&pipe->ref_cnt);
-
-	WARN(tmp < 0, "Invalid unmap with ref_cnt=%d", tmp);
-	if (tmp == 0)
-		mdss_mdp_pipe_free(pipe);
+	if (kref_put_mutex(&pipe->kref, mdss_mdp_pipe_free,
+			&mdss_mdp_sspp_lock)) {
+		WARN(1, "Unexpected free pipe during unmap");
+		mutex_unlock(&mdss_mdp_sspp_lock);
+	}
 }
 
 int mdss_mdp_pipe_map(struct mdss_mdp_pipe *pipe)
 {
-	if (!atomic_inc_not_zero(&pipe->ref_cnt)) {
-		pr_err("attempting to map unallocated pipe (%d)", pipe->num);
+	if (!kref_get_unless_zero(&pipe->kref))
 		return -EINVAL;
-	}
 	return 0;
 }
 
@@ -536,7 +532,7 @@ static struct mdss_mdp_pipe *mdss_mdp_pipe_init(struct mdss_mdp_mixer *mixer,
 
 	for (i = off; i < npipes; i++) {
 		pipe = pipe_pool + i;
-		if (atomic_cmpxchg(&pipe->ref_cnt, 0, 1) == 0) {
+		if (atomic_read(&pipe->kref.refcount) == 0) {
 			pipe->mixer = mixer;
 			break;
 		}
@@ -546,7 +542,6 @@ static struct mdss_mdp_pipe *mdss_mdp_pipe_init(struct mdss_mdp_mixer *mixer,
 	if (pipe && mdss_mdp_pipe_fetch_halt(pipe)) {
 		pr_err("%d failed because pipe is in bad state\n",
 			pipe->num);
-		atomic_dec(&pipe->ref_cnt);
 		return NULL;
 	}
 
@@ -554,13 +549,14 @@ static struct mdss_mdp_pipe *mdss_mdp_pipe_init(struct mdss_mdp_mixer *mixer,
 		pr_debug("type=%x   pnum=%d\n", pipe->type, pipe->num);
 		mutex_init(&pipe->pp_res.hist.hist_mutex);
 		spin_lock_init(&pipe->pp_res.hist.hist_lock);
+		kref_init(&pipe->kref);
 	} else if (pipe_share) {
 		/*
 		 * when there is no dedicated wfd blk, DMA pipe can be
 		 * shared as long as its attached to a writeback mixer
 		 */
 		pipe = mdata->dma_pipes + mixer->num;
-		atomic_inc(&pipe->ref_cnt);
+		kref_get(&pipe->kref);
 		pr_debug("pipe sharing for pipe=%d\n", pipe->num);
 	} else {
 		pr_err("no %d type pipes available\n", type);
@@ -582,7 +578,7 @@ struct mdss_mdp_pipe *mdss_mdp_pipe_alloc_dma(struct mdss_mdp_mixer *mixer)
 	} else if (pipe != &mdata->dma_pipes[mixer->num]) {
 		pr_err("Requested DMA pnum=%d not available\n",
 			mdata->dma_pipes[mixer->num].num);
-		mdss_mdp_pipe_unmap(pipe);
+		kref_put(&pipe->kref, mdss_mdp_pipe_free);
 		pipe = NULL;
 	} else {
 		pipe->mixer = mixer;
@@ -669,10 +665,13 @@ struct mdss_mdp_pipe *mdss_mdp_pipe_search(struct mdss_data_type *mdata,
 	return NULL;
 }
 
-static int mdss_mdp_pipe_free(struct mdss_mdp_pipe *pipe)
+static void mdss_mdp_pipe_free(struct kref *kref)
 {
-	pr_debug("ndx=%x pnum=%d ref_cnt=%d\n", pipe->ndx, pipe->num,
-			atomic_read(&pipe->ref_cnt));
+	struct mdss_mdp_pipe *pipe;
+
+	pipe = container_of(kref, struct mdss_mdp_pipe, kref);
+
+	pr_debug("ndx=%x pnum=%d\n", pipe->ndx, pipe->num);
 
 	if (pipe->play_cnt) {
 		mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
@@ -687,8 +686,6 @@ static int mdss_mdp_pipe_free(struct mdss_mdp_pipe *pipe)
 	pipe->flags = 0;
 	pipe->bwc_mode = 0;
 	pipe->mfd = NULL;
-
-	return 0;
 }
 
 static int mdss_mdp_is_pipe_idle(struct mdss_mdp_pipe *pipe,
@@ -796,19 +793,16 @@ int mdss_mdp_pipe_fetch_halt(struct mdss_mdp_pipe *pipe)
 
 int mdss_mdp_pipe_destroy(struct mdss_mdp_pipe *pipe)
 {
-	int tmp;
-
-	tmp = atomic_dec_return(&pipe->ref_cnt);
-
-	if (tmp != 0) {
-		pr_err("unable to free pipe %d while still in use (%d)\n",
-				pipe->num, tmp);
+	if (!kref_put_mutex(&pipe->kref, mdss_mdp_pipe_free,
+			&mdss_mdp_sspp_lock)) {
+		pr_err("unable to free pipe %d while still in use\n",
+				pipe->num);
 		return -EBUSY;
 	}
-	mdss_mdp_pipe_free(pipe);
+
+	mutex_unlock(&mdss_mdp_sspp_lock);
 
 	return 0;
-
 }
 
 /**
@@ -867,7 +861,7 @@ int mdss_mdp_pipe_handoff(struct mdss_mdp_pipe *pipe)
 
 	pipe->is_handed_off = true;
 	pipe->play_cnt = 1;
-	atomic_inc(&pipe->ref_cnt);
+	kref_init(&pipe->kref);
 
 error:
 	return rc;
