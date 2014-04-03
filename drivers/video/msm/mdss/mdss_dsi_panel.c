@@ -670,6 +670,7 @@ static int mdss_panel_parse_dt(struct platform_device *pdev,
 	pinfo->mipi.dst_format = (!rc ? tmp : DSI_VIDEO_DST_FORMAT_RGB888);
 
 	rc = of_property_read_u32(np, "qcom,mdss-pan-dsi-vc", &tmp);
+
 	pinfo->mipi.vc = (!rc ? tmp : 0);
 
 	rc = of_property_read_u32(np, "qcom,mdss-pan-dsi-rgb-swap", &tmp);
@@ -796,6 +797,8 @@ static int mdss_panel_parse_dt(struct platform_device *pdev,
 		pinfo->fbc.target_bpp =
 			pinfo->bpp;
 	}
+	pinfo->mipi.last_line_interleave_en = of_property_read_bool(np,
+		"qcom,mdss-dsi-last-line-interleave");
 
 	mdss_dsi_parse_dcs_cmds(np, &panel_data->on_cmds,
 		"qcom,panel-on-cmds", "qcom,on-cmds-dsi-state");
