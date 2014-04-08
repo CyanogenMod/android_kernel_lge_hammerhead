@@ -31,6 +31,9 @@
 #include "mdss_dsi.h"
 #include "mdss_debug.h"
 
+static int mdss_dsi_pinctrl_set_state(struct mdss_dsi_ctrl_pdata *ctrl_pdata,
+					bool active);
+
 static int mdss_dsi_regulator_init(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -81,6 +84,9 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 		pr_warn("%s: Panel reset failed. rc=%d\n", __func__, ret);
 		ret = 0;
 	}
+
+	if (mdss_dsi_pinctrl_set_state(ctrl_pdata, false))
+		pr_debug("reset disable: pinctrl not enabled\n");
 
 	for (i = DSI_MAX_PM - 1; i >= 0; i--) {
 		/*
@@ -142,6 +148,8 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 	 */
 	if (pdata->panel_info.cont_splash_enabled ||
 		!pdata->panel_info.mipi.lp11_init) {
+		if (mdss_dsi_pinctrl_set_state(ctrl_pdata, true))
+			pr_debug("reset enable: pinctrl not enabled\n");
 
 		ret = mdss_dsi_panel_reset(pdata, 1);
 		if (ret)
@@ -565,8 +573,11 @@ int mdss_dsi_on(struct mdss_panel_data *pdata)
 	 * Issue hardware reset line after enabling the DSI clocks and data
 	 * data lanes for LP11 init
 	 */
-	if (mipi->lp11_init)
+	if (mipi->lp11_init) {
+		if (mdss_dsi_pinctrl_set_state(ctrl_pdata, true))
+			pr_debug("reset enable: pinctrl not enabled\n");
 		mdss_dsi_panel_reset(pdata, 1);
+	}
 
 	if (mipi->init_delay)
 		usleep(mipi->init_delay);
@@ -586,6 +597,59 @@ int mdss_dsi_on(struct mdss_panel_data *pdata)
 exit:
 	pr_debug("%s-:\n", __func__);
 	return ret;
+}
+
+static int mdss_dsi_pinctrl_set_state(
+	struct mdss_dsi_ctrl_pdata *ctrl_pdata,	
+		bool active)
+{
+	struct pinctrl_state *pin_state;
+	int rc = -EFAULT;
+
+	if (IS_ERR_OR_NULL(ctrl_pdata->pin_res.pinctrl))
+		return PTR_ERR(ctrl_pdata->pin_res.pinctrl);
+
+	pin_state = active ? ctrl_pdata->pin_res.gpio_state_active
+			: ctrl_pdata->pin_res.gpio_state_suspend;
+	if (!IS_ERR_OR_NULL(pin_state)) {
+		rc = pinctrl_select_state(ctrl_pdata->pin_res.pinctrl,
+				pin_state);
+		if (rc)
+			pr_err("%s: can not set %s pins\n", __func__,
+			 	active ? MDSS_PINCTRL_STATE_DEFAULT
+			 	: MDSS_PINCTRL_STATE_SLEEP);
+	} else {
+	pr_err("%s: invalid '%s' pinstate\n", __func__,
+		active ? MDSS_PINCTRL_STATE_DEFAULT
+		: MDSS_PINCTRL_STATE_SLEEP);
+}
+return rc;
+}
+
+static int mdss_dsi_pinctrl_init(struct platform_device *pdev)
+{
+	struct mdss_dsi_ctrl_pdata *ctrl_pdata;	
+
+	ctrl_pdata = platform_get_drvdata(pdev);
+	ctrl_pdata->pin_res.pinctrl = devm_pinctrl_get(&pdev->dev);
+	if (IS_ERR_OR_NULL(ctrl_pdata->pin_res.pinctrl)) {
+		pr_err("%s: failed to get pinctrl\n", __func__);
+		return PTR_ERR(ctrl_pdata->pin_res.pinctrl);
+	}
+
+	ctrl_pdata->pin_res.gpio_state_active
+		= pinctrl_lookup_state(ctrl_pdata->pin_res.pinctrl,
+				MDSS_PINCTRL_STATE_DEFAULT);
+	if (IS_ERR_OR_NULL(ctrl_pdata->pin_res.gpio_state_active))
+		pr_warn("%s: can not get default pinstate\n", __func__);
+
+	ctrl_pdata->pin_res.gpio_state_suspend
+		= pinctrl_lookup_state(ctrl_pdata->pin_res.pinctrl,
+			MDSS_PINCTRL_STATE_SLEEP);
+	if (IS_ERR_OR_NULL(ctrl_pdata->pin_res.gpio_state_suspend))
+		pr_warn("%s: can not get sleep pinstate\n", __func__);
+
+	return 0;
 }
 
 static int mdss_dsi_unblank(struct mdss_panel_data *pdata)
@@ -1119,6 +1183,10 @@ static int __devinit mdss_dsi_ctrl_probe(struct platform_device *pdev)
 			__func__, rc);
 		goto error_no_mem;
 	}
+
+	rc = mdss_dsi_pinctrl_init(pdev);
+	if (rc)
+		pr_warn("%s: failed to get pin resources\n", __func__);
 
 	/* Parse the regulator information */
 	for (i = 0; i < DSI_MAX_PM; i++) {
