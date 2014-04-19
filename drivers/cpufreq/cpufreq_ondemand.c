@@ -144,6 +144,8 @@ static struct dbs_tuners {
 	int          powersave_bias;
 	unsigned int io_is_busy;
 	unsigned int input_boost;
+	unsigned int enable_boost;
+	unsigned int sync_threads;
 } dbs_tuners_ins = {
 	.up_threshold_multi_core = DEF_FREQUENCY_UP_THRESHOLD,
 	.up_threshold = DEF_FREQUENCY_UP_THRESHOLD,
@@ -156,6 +158,8 @@ static struct dbs_tuners {
 	.sync_freq = 0,
 	.optimal_freq = 0,
 	.input_boost = 0,
+	.enable_boost = 0,
+	.sync_threads = 0,
 };
 
 static inline u64 get_cpu_idle_time_jiffy(unsigned int cpu, u64 *wall)
@@ -322,6 +326,8 @@ show_one(optimal_freq, optimal_freq);
 show_one(up_threshold_any_cpu_load, up_threshold_any_cpu_load);
 show_one(sync_freq, sync_freq);
 show_one(input_boost, input_boost);
+show_one(enable_boost, enable_boost);
+show_one(sync_threads, sync_threads);
 
 static ssize_t show_powersave_bias
 (struct kobject *kobj, struct attribute *attr, char *buf)
@@ -701,6 +707,36 @@ skip_this_cpu_bypass:
 	return count;
 }
 
+static ssize_t store_enable_boost(struct kobject *a, struct attribute *b,
+		const char *buf, size_t count)
+{
+	unsigned int input;
+	int ret;
+	ret = sscanf(buf, "%u", &input);
+
+	if (ret != 1 || input > 1 || input < 0)
+		return -EINVAL;
+
+	dbs_tuners_ins.enable_boost = input;
+
+	return count;
+}
+
+static ssize_t store_sync_threads(struct kobject *a, struct attribute *b,
+		const char *buf, size_t count)
+{
+	unsigned int input;
+	int ret;
+	ret = sscanf(buf, "%u", &input);
+
+	if (ret != 1 || input > 1 || input < 0)
+		return -EINVAL;
+
+	dbs_tuners_ins.sync_threads = input;
+
+	return count;
+}
+
 define_one_global_rw(sampling_rate);
 define_one_global_rw(io_is_busy);
 define_one_global_rw(up_threshold);
@@ -714,6 +750,8 @@ define_one_global_rw(optimal_freq);
 define_one_global_rw(up_threshold_any_cpu_load);
 define_one_global_rw(sync_freq);
 define_one_global_rw(input_boost);
+define_one_global_rw(enable_boost);
+define_one_global_rw(sync_threads);
 
 static struct attribute *dbs_attributes[] = {
 	&sampling_rate_min.attr,
@@ -730,6 +768,8 @@ static struct attribute *dbs_attributes[] = {
 	&up_threshold_any_cpu_load.attr,
 	&sync_freq.attr,
 	&input_boost.attr,
+	&enable_boost.attr,
+	&sync_threads.attr,
 	NULL
 };
 
@@ -1099,6 +1139,9 @@ static void dbs_input_event(struct input_handle *handle, unsigned int type,
 {
 	int i;
 
+	if (!dbs_tuners_ins.enable_boost)
+		return;
+
 	if ((dbs_tuners_ins.powersave_bias == POWERSAVE_BIAS_MAXLEVEL) ||
 		(dbs_tuners_ins.powersave_bias == POWERSAVE_BIAS_MINLEVEL)) {
 		/* nothing to do */
@@ -1188,6 +1231,9 @@ static int sync_pending(struct cpu_dbs_info_s *this_dbs_info)
 static int dbs_sync_should_run(unsigned int dest_cpu)
 {
 	struct cpu_dbs_info_s *this_dbs_info;
+
+	if (!dbs_tuners_ins.sync_threads)
+		return 0;
 
 	this_dbs_info = &per_cpu(od_cpu_dbs_info, dest_cpu);
 
