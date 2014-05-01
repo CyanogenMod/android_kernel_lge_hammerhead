@@ -246,11 +246,20 @@ struct dsi_pinctrl_res {
 	struct pinctrl_state *gpio_state_suspend;
 };
 
+struct panel_horizontal_idle {
+	int min;
+	int max;
+	int idle;
+};
+
 enum {
 	DSI_CTRL_0,
 	DSI_CTRL_1,
 	DSI_CTRL_MAX,
 };
+
+#define DSI_CTRL_LEFT		DSI_CTRL_0
+#define DSI_CTRL_RIGHT		DSI_CTRL_1
 
 /* DSI controller #0 is always treated as a master in broadcast mode */
 #define DSI_CTRL_MASTER		DSI_CTRL_0
@@ -269,7 +278,7 @@ struct mdss_dsi_ctrl_pdata {
 	int ndx;	/* panel_num */
 	int (*on) (struct mdss_panel_data *pdata);
 	int (*off) (struct mdss_panel_data *pdata);
-	int (*partial_update_fnc) (struct mdss_panel_data *pdata);
+	int (*set_col_page_addr) (struct mdss_panel_data *pdata);
 	int (*low_power_config) (struct mdss_panel_data *pdata, int enable);
 	int (*check_status) (struct mdss_dsi_ctrl_pdata *pdata);
 	int (*cmdlist_commit)(struct mdss_dsi_ctrl_pdata *ctrl, int from_mdp);
@@ -304,6 +313,8 @@ struct mdss_dsi_ctrl_pdata {
 	int new_fps;
 	int pwm_enabled;
 	bool dmap_iommu_map;
+
+	struct mdss_rect roi;
 	struct pwm_device *pwm_bl;
 	struct dsi_drv_cm_data shared_pdata;
 	u32 pclk_rate;
@@ -344,6 +355,9 @@ struct mdss_dsi_ctrl_pdata {
 	int status_mode;
 
 	struct dsi_pinctrl_res pin_res;
+
+	int horizontal_idle_cnt;
+	struct panel_horizontal_idle *line_idle;
 };
 
 struct dsi_status_data {

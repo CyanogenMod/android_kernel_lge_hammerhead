@@ -248,6 +248,12 @@ Optional properties:
 					"low" = Set GPIO to LOW
 - qcom,partial-update-enabled:		Boolean used to enable partial
 					panel update for command mode panels.
+- qcom,mdss-dsi-horizontal-line-idle:	List of width ranges (EC - SC) in pixels indicating
+					additional idle time in dsi clock cycles that is needed
+					to compensate for smaller line width.
+- qcom,partial-update-roi-merge:	Boolean indicates roi combination is need
+					and function has been provided for dcs
+					2A/2B command.
 - qcom,mdss-dsi-reset-sequence:		An array that lists the
 					sequence of reset gpio values and sleeps
 					Each command will have the format defined
@@ -301,7 +307,6 @@ Optional properties:
 					dynamic switching from video mode to command mode
 					and vice versa.
 - qcom,video-to-cmd-mode-switch-commands:	List of commands that need to be sent
-					to panel in order to switch from video mode to command mode dynamically.
 					Refer to "qcom,mdss-dsi-on-command" section for adding commands.
 - qcom,cmd-to-video-mode-switch-commands:	List of commands that need to be sent
 					to panel in order to switch from command mode to video mode dynamically.
@@ -436,6 +441,9 @@ Example:
 		qcom,mdss-tear-check-rd-ptr-trigger-intr = <1281>;
 		qcom,mdss-tear-check-frame-rate = <6000>;
 		qcom,panel-roi-alignment = <4 4 2 2 20 20>;
+		qcom,mdss-dsi-horizontal-line-idle = <0 40 256>,
+						<40 120 128>,
+						<128 240 64>;
 		qcom,dynamic-mode-switch-enabled;
 		qcom,video-to-cmd-mode-switch-commands = [15 01 00 00 00 00 02 C2 0B
 						15 01 00 00 00 00 02 C2 08];
