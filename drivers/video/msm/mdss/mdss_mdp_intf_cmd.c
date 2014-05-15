@@ -798,6 +798,11 @@ int mdss_mdp_cmd_stop(struct mdss_mdp_ctl *ctl, int panel_power_state)
 	                 * get turned on when the first update comes.
                          */
 			pr_debug("%s: nothing to be done.\n", __func__);
+			list_for_each_entry_safe(handle, tmp,
+				&ctl->saved_vsync_handlers, saved_list) {
+				mdss_mdp_cmd_add_vsync_handler(ctl, handle);
+				list_del_init(&handle->saved_list);
+			}
 			return 0;
 		}
 	}
@@ -807,8 +812,10 @@ int mdss_mdp_cmd_stop(struct mdss_mdp_ctl *ctl, int panel_power_state)
 
 	pr_debug("%s: turn off interface clocks\n", __func__);
 
-	list_for_each_entry_safe(handle, tmp, &ctx->vsync_handlers, list)
+	list_for_each_entry_safe(handle, tmp, &ctx->vsync_handlers, list) {
+		list_add(&handle->saved_list, &ctl->saved_vsync_handlers);
 		mdss_mdp_cmd_remove_vsync_handler(ctl, handle);
+	}
 	MDSS_XLOG(ctl->num, ctx->koff_cnt, ctx->clk_enabled,
 				ctx->rdptr_enabled, XLOG_FUNC_ENTRY);
 
@@ -906,6 +913,7 @@ int mdss_mdp_cmd_start(struct mdss_mdp_ctl *ctl)
 	struct mdss_mdp_cmd_ctx *ctx;
 	struct mdss_mdp_mixer *mixer;
 	int i, ret;
+	struct mdss_mdp_vsync_handler *tmp, *handle;
 
 	pr_debug("%s:+\n", __func__);
 
@@ -926,7 +934,8 @@ int mdss_mdp_cmd_start(struct mdss_mdp_ctl *ctl)
 					 __func__);
 				mdss_mdp_cmd_restore(ctl);
 				/* Turn on panel so that it can exit low power mode */
-				return mdss_mdp_cmd_panel_on(ctl);
+				ret = mdss_mdp_cmd_panel_on(ctl);
+				goto restore_vsync_handlers;
 			} else {
 				pr_err("Intf %d already in use\n", i);
 				return -EBUSY;
@@ -988,6 +997,13 @@ int mdss_mdp_cmd_start(struct mdss_mdp_ctl *ctl)
 	ctl->restore_fnc = mdss_mdp_cmd_restore;
 	pr_debug("%s:-\n", __func__);
 
-	return 0;
+restore_vsync_handlers:
+	list_for_each_entry_safe(handle, tmp, &ctl->saved_vsync_handlers,
+			saved_list) {
+		mdss_mdp_cmd_add_vsync_handler(ctl, handle);
+		list_del_init(&handle->saved_list);
+	}
+
+	return ret;
 }
 
