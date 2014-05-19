@@ -206,10 +206,12 @@ struct mdss_data_type {
 	int handoff_pending;
 	struct mdss_prefill_data prefill_data;
 	bool ulps;
+	int iommu_ref_cnt;
 
 	u64 ab[MDSS_MAX_HW_BLK];
 	u64 ib[MDSS_MAX_HW_BLK];
 };
+
 extern struct mdss_data_type *mdss_res;
 
 struct mdss_hw {
@@ -222,7 +224,8 @@ int mdss_register_irq(struct mdss_hw *hw);
 void mdss_enable_irq(struct mdss_hw *hw);
 void mdss_disable_irq(struct mdss_hw *hw);
 void mdss_disable_irq_nosync(struct mdss_hw *hw);
-int mdss_bus_bandwidth_ctrl(int enable);
+void mdss_bus_bandwidth_ctrl(int enable);
+int mdss_iommu_ctrl(int enable);
 int mdss_bus_scale_set_quota(int client, u64 ab_quota, u64 ib_quota);
 
 static inline struct ion_client *mdss_get_ionclient(void)
