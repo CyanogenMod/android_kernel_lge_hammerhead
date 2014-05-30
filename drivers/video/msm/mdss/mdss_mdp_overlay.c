@@ -2462,6 +2462,7 @@ static int mdss_mdp_overlay_on(struct msm_fb_data_type *mfd)
 		rc = mdss_mdp_overlay_start(mfd);
 		if (!IS_ERR_VALUE(rc) && (mfd->panel_info->type != DTV_PANEL) &&
 			(mfd->panel_info->type != WRITEBACK_PANEL)) {
+			atomic_inc(&mfd->mdp_sync_pt_data.commit_cnt);
 			rc = mdss_mdp_overlay_kickoff(mfd, NULL);
 
 			if (mfd->panel_info->type == MIPI_CMD_PANEL)
