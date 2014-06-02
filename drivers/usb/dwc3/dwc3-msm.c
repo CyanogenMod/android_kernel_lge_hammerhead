@@ -166,6 +166,9 @@ MODULE_PARM_DESC(prop_chg_detect, "Enable Proprietary charger detection");
 #define PWR_EVNT_IRQ_STAT_REG    (QSCRATCH_REG_OFFSET + 0x58)
 #define PWR_EVNT_IRQ_MASK_REG    (QSCRATCH_REG_OFFSET + 0x5C)
 
+#define DWC3_ID_STATUS_DELAY        150 /* 150 msec */
+#define DWC3_ID_STATUS_MAX_DELAY    600 /* 600 msec */
+
 struct dwc3_msm_req_complete {
 	struct list_head list_item;
 	struct usb_request *req;
@@ -215,7 +218,8 @@ struct dwc3_msm {
 	struct delayed_work	chg_work;
 	enum usb_chg_state	chg_state;
 	int			pmic_id_irq;
-	struct work_struct	id_work;
+	bool                    id_irq_enabled;
+	struct delayed_work	id_work;
 	struct qpnp_adc_tm_btm_param	adc_param;
 	struct qpnp_adc_tm_chip *adc_tm_dev;
 	struct delayed_work	init_adc_work;
@@ -251,6 +255,7 @@ struct dwc3_msm {
 	bool ext_chg_opened;
 	bool ext_chg_active;
 	struct completion ext_chg_wait;
+	bool defer_read_id;
 };
 
 #define USB_HSPHY_3P3_VOL_MIN		3050000 /* uV */
@@ -2386,6 +2391,7 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
 				  const union power_supply_propval *val)
 {
 	static bool init;
+	unsigned long flags;
 	struct dwc3_msm *mdwc = container_of(psy, struct dwc3_msm,
 								usb_psy);
 
@@ -2399,6 +2405,11 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
 		if (mdwc->otg_xceiv && !mdwc->ext_inuse &&
 		    (mdwc->ext_xceiv.otg_capability || !init)) {
 			mdwc->ext_xceiv.bsv = val->intval;
+			/* Kick the phone out of host mode if vbus is on */
+			if (val->intval &&
+				(mdwc->ext_xceiv.id == DWC3_ID_GROUND))
+				mdwc->ext_xceiv.id = mdwc->id_state =
+								DWC3_ID_FLOAT;
 			/*
 			 * set debouncing delay to 120msec. Otherwise battery
 			 * charging CDP complaince test fails if delay > 120ms.
@@ -2410,6 +2421,35 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
 				init = true;
 		}
 		mdwc->vbus_active = val->intval;
+
+		if (!mdwc->pmic_id_irq)
+			break;
+
+		/* read id value at powerup */
+		if (mdwc->defer_read_id) {
+			mdwc->defer_read_id = false;
+			local_irq_save(flags);
+			/* Update initial ID state */
+			mdwc->id_state =
+				!!irq_read_line(mdwc->pmic_id_irq);
+			if (mdwc->id_state == DWC3_ID_GROUND &&
+						!mdwc->vbus_active)
+				queue_delayed_work(system_nrt_wq,
+						&mdwc->id_work,
+						msecs_to_jiffies(
+							DWC3_ID_STATUS_DELAY));
+			local_irq_restore(flags);
+		}
+
+		/* Disable ID interrupts when vbus is active */
+		if (mdwc->vbus_active && mdwc->id_irq_enabled) {
+			disable_irq(mdwc->pmic_id_irq);
+			mdwc->id_irq_enabled = false;
+		} else if (!mdwc->vbus_active && !mdwc->id_irq_enabled) {
+			enable_irq(mdwc->pmic_id_irq);
+			mdwc->id_irq_enabled = true;
+		}
+
 		break;
 	case POWER_SUPPLY_PROP_ONLINE:
 		mdwc->online = val->intval;
@@ -2536,13 +2576,20 @@ static void dwc3_ext_notify_online(void *ctx, int on)
 
 static void dwc3_id_work(struct work_struct *w)
 {
-	struct dwc3_msm *mdwc = container_of(w, struct dwc3_msm, id_work);
+	struct dwc3_msm *mdwc = container_of(w, struct dwc3_msm, id_work.work);
 	int ret;
+
+	if (mdwc->vbus_active) {
+		pr_err("Ignore spurious id interrupt, when vbus is active\n");
+		return;
+	}
 
 	/* Give external client a chance to handle */
 	if (!mdwc->ext_inuse && usb_ext) {
-		if (mdwc->pmic_id_irq)
+		if (mdwc->pmic_id_irq && mdwc->id_irq_enabled) {
 			disable_irq(mdwc->pmic_id_irq);
+			mdwc->id_irq_enabled = false;
+		}
 
 		ret = usb_ext->notify(usb_ext->ctxt, mdwc->id_state,
 				      dwc3_ext_notify_online, mdwc);
@@ -2555,7 +2602,10 @@ static void dwc3_id_work(struct work_struct *w)
 			/* ID may have changed while IRQ disabled; update it */
 			mdwc->id_state = !!irq_read_line(mdwc->pmic_id_irq);
 			local_irq_restore(flags);
-			enable_irq(mdwc->pmic_id_irq);
+			if (!mdwc->id_irq_enabled) {
+				enable_irq(mdwc->pmic_id_irq);
+				mdwc->id_irq_enabled = true;
+			}
 		}
 
 		mdwc->ext_inuse = (ret == 0);
@@ -2576,7 +2626,18 @@ static irqreturn_t dwc3_pmic_id_irq(int irq, void *data)
 	id = !!irq_read_line(irq);
 	if (mdwc->id_state != id) {
 		mdwc->id_state = id;
-		queue_work(system_nrt_wq, &mdwc->id_work);
+		if (mdwc->vbus_active)
+			return IRQ_HANDLED;
+
+		/* Debounce Host Mode detection more */
+		if (mdwc->id_state == DWC3_ID_GROUND)
+			queue_delayed_work(system_nrt_wq, &mdwc->id_work,
+					 msecs_to_jiffies(
+						DWC3_ID_STATUS_MAX_DELAY));
+		else
+			queue_delayed_work(system_nrt_wq, &mdwc->id_work,
+					 msecs_to_jiffies(
+						DWC3_ID_STATUS_DELAY));
 	}
 
 	return IRQ_HANDLED;
@@ -2603,7 +2664,7 @@ static void dwc3_adc_notification(enum qpnp_tm_state state, void *ctx)
 		mdwc->adc_param.state_request = ADC_TM_HIGH_THR_ENABLE;
 	}
 
-	dwc3_id_work(&mdwc->id_work);
+	dwc3_id_work(&mdwc->id_work.work);
 
 	/* re-arm ADC interrupt */
 	qpnp_adc_tm_usbid_configure(mdwc->adc_tm_dev, &mdwc->adc_param);
@@ -2869,7 +2930,6 @@ static int __devinit dwc3_msm_probe(struct platform_device *pdev)
 	struct dwc3_msm *mdwc;
 	struct resource *res;
 	void __iomem *tcsr;
-	unsigned long flags;
 	int ret = 0;
 	int len = 0;
 	u32 tmp[3];
@@ -2888,7 +2948,7 @@ static int __devinit dwc3_msm_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&mdwc->resume_work, dwc3_resume_work);
 	INIT_WORK(&mdwc->restart_usb_work, dwc3_restart_usb_work);
 	INIT_WORK(&mdwc->usb_block_reset_work, dwc3_block_reset_usb_work);
-	INIT_WORK(&mdwc->id_work, dwc3_id_work);
+	INIT_DELAYED_WORK(&mdwc->id_work, dwc3_id_work);
 	INIT_DELAYED_WORK(&mdwc->init_adc_work, dwc3_init_adc_work);
 	init_completion(&mdwc->ext_chg_wait);
 
@@ -3118,15 +3178,10 @@ static int __devinit dwc3_msm_probe(struct platform_device *pdev)
 					goto disable_hs_ldo;
 				}
 
-				local_irq_save(flags);
 				/* Update initial ID state */
-				mdwc->id_state =
-					!!irq_read_line(mdwc->pmic_id_irq);
-				if (mdwc->id_state == DWC3_ID_GROUND)
-					queue_work(system_nrt_wq,
-							&mdwc->id_work);
-				local_irq_restore(flags);
+				mdwc->defer_read_id = true;
 				enable_irq_wake(mdwc->pmic_id_irq);
+				mdwc->id_irq_enabled = true;
 			}
 		}
 
