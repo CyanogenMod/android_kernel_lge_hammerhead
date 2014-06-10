@@ -139,8 +139,9 @@ static int boost_mig_sync_thread(void *data)
 	struct cpufreq_policy src_policy;
 	unsigned long flags;
 
-	while(1) {
-		wait_event(s->sync_wq, s->pending || kthread_should_stop());
+	while (1) {
+		wait_event_interruptible(s->sync_wq,
+					s->pending || kthread_should_stop());
 
 		if (kthread_should_stop())
 			break;
