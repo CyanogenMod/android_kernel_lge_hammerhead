@@ -27,6 +27,14 @@ Required properties
 				to the respective VIG pipes. Number of xin ids
 				defined should match the number of offsets
 				defined in property: qcom,mdss-pipe-vig-off
+- qcom,mdss-pipe-vig-clk-ctrl-off: Array of offsets describing clk control
+				offsets for dynamic clock gating. 1st value
+				in the array represents offset of the control
+				register. 2nd value represents bit offset within
+				control register and 3rd value represents bit
+				offset within status register. Number of tuples
+				defined should match the number of offsets
+				defined in property: qcom,mdss-pipe-vig-off
 - qcom,mdss-pipe-rgb-off:	Array of offsets for MDP source surface pipes of
 				type RGB, the offsets are calculated from
 				register "mdp_phys" defined in reg property.
@@ -42,6 +50,14 @@ Required properties
 				to the respective RGB pipes. Number of xin ids
 				defined should match the number of offsets
 				defined in property: qcom,mdss-pipe-rgb-off
+- qcom,mdss-pipe-rgb-clk-ctrl-off: Array of offsets describing clk control
+				offsets for dynamic clock gating. 1st value
+				in the array represents offset of the control
+				register. 2nd value represents bit offset within
+				control register and 3rd value represents bit
+				offset within status register. Number of tuples
+				defined should match the number of offsets
+				defined in property: qcom,mdss-pipe-rgb-off
 - qcom,mdss-pipe-dma-off:	Array of offsets for MDP source surface pipes of
 				type DMA, the offsets are calculated from
 				register "mdp_phys" defined in reg property.
@@ -55,6 +71,14 @@ Required properties
 				defined in property: qcom,mdss-pipe-dma-off
 - qcom,mdss-pipe-dma-xin-id:	Array of VBIF clients ids (xins) corresponding
 				to the respective DMA pipes. Number of xin ids
+				defined should match the number of offsets
+				defined in property: qcom,mdss-pipe-dma-off
+- qcom,mdss-pipe-dma-clk-ctrl-off: Array of offsets describing clk control
+				offsets for dynamic clock gating. 1st value
+				in the array represents offset of the control
+				register. 2nd value represents bit offset within
+				control register and 3rd value represents bit
+				offset within status register. Number of tuples
 				defined should match the number of offsets
 				defined in property: qcom,mdss-pipe-dma-off
 - qcom,mdss-smp-data:		Array of shared memory pool data. There should
@@ -107,6 +131,39 @@ Required properties
 				defined in reg property. The number of offsets
 				defiend should reflect the number of progammable
 				interface blocks avaialble in hardware.
+
+Bus Scaling Data:
+- qcom,msm-bus,name:		String property describing MDSS client.
+- qcom,msm-bus,num-cases:	This is the the number of Bus Scaling use cases
+				defined in the vectors property. This must be
+				set to <3> for MDSS driver where use-case 0 is
+				used to take off MDSS BW votes from the system.
+				And use-case 1 & 2 are used in ping-pong fashion
+				to generate run-time BW requests.
+- qcom,msm-bus,active-only:	A boolean flag indicating if it is active only.
+- qcom,msm-bus,num-paths:	This represents the number of paths in each
+				Bus Scaling Usecase. This value depends on
+				how many number of AXI master ports are
+				dedicated to MDSS for particular chipset.
+- qcom,msm-bus,vectors-KBps:	* A series of 4 cell properties, with a format
+				of (src, dst, ab, ib) which is defined at
+				Documentation/devicetree/bindings/arm/msm/msm_bus.txt
+				* Current values of src & dst are defined at
+				arch/arm/mach-msm/msm_bus_board.h
+				src values allowed for MDSS are:
+					22 = MSM_BUS_MASTER_MDP_PORT0
+					23 = MSM_BUS_MASTER_MDP_PORT1
+				dst values allowed for MDSS are:
+					512 = MSM_BUS_SLAVE_EBI_CH0
+				ab: Represents aggregated bandwidth.
+				ib: Represents instantaneous bandwidth.
+				* Total number of 4 cell properties will be
+				(number of use-cases * number of paths).
+				* These values will be overridden by the driver
+				based on the run-time requirements. So initial
+				ab and ib values defined here are random and
+				bare no logic except for the use-case 0 where ab
+				and ib values needs to be 0.
 
 Optional properties:
 - vdd-cx-supply :	Phandle for vdd CX regulator device node.
@@ -181,6 +238,12 @@ Subnode properties:
 			 This property is required whenever the continuous splash
 			 screen feature is enabled for the corresponding
 			 framebuffer device.
+- qcom,mdss-fb-splash-logo-enabled:    The boolean entry enables the framebuffer
+					driver to display the splash logo image.
+					It is independent of continuous splash
+					screen feature and has no relation with
+					qcom,cont-splash-enabled entry present in
+					panel configuration.
 
 Example:
 	qcom,mdss_mdp@fd900000 {
@@ -192,6 +255,16 @@ Example:
 		vdd-supply = <&gdsc_mdss>;
 		vdd-cx-supply = <&pm8841_s2_corner>;
 		batfet-supply = <&pm8941_chg_batif>;
+
+		/* Bus Scale Settings */
+		qcom,msm-bus,name = "mdss_mdp";
+		qcom,msm-bus,num-cases = <3>;
+		qcom,msm-bus,num-paths = <2>;
+		qcom,msm-bus,vectors-KBps =
+			<22 512 0 0>, <23 512 0 0>,
+			<22 512 0 6400000>, <23 512 0 6400000>,
+			<22 512 0 6400000>, <23 512 0 6400000>;
+
 		qcom,max-clk-rate = <320000000>;
 		qcom,vbif-settings = <0x0004 0x00000001>,
 				     <0x00D8 0x00000707>;
@@ -221,6 +294,19 @@ Example:
 		qcom,mdss-has-decimation;
 		qcom,mdss-has-wfd-blk;
 
+		qcom,mdss-pipe-vig-clk-ctrl-offsets = <0x3AC 0 0>,
+						      <0x3B4 0 0>,
+						      <0x3BC 0 0>,
+						      <0x3C4 0 0>;
+
+		qcom,mdss-pipe-rgb-clk-ctrl-offsets = <0x3AC 4 8>,
+						      <0x3B4 4 8>,
+						      <0x3BC 4 8>,
+						      <0x3C4 4 8>;
+
+		qcom,mdss-pipe-dma-clk-ctrl-offsets = <0x3AC 8 12>,
+						      <0x3B4 8 12>;
+
 		qcom,mdss-ctl-off = <0x00000600 0x00000700 0x00000800
 				     0x00000900 0x0000A00>;
 		qcom,mdss-mixer-intf-off = <0x00003200 0x00003600
@@ -238,6 +324,7 @@ Example:
 			compatible = "qcom,mdss-fb";
 			qcom,mdss-mixer-swap;
 			qcom,mdss-fb-split = <480 240>
+			qcom,mdss-fb-splash-logo-enabled:
 		};
 	};
 

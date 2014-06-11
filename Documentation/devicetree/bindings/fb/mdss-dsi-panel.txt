@@ -112,6 +112,8 @@ Optional properties:
 - qcom,mdss-pan-te-sel:			Specifies TE operating mode.
 					0 = TE through embedded dcs command
 					1 = TE through TE gpio pin.
+- qcom,mdss-dsi-last-line-interleave Boolean to determine if last line
+					interleave flag needs to be enabled.
 - qcom,mdss-pan-dsi-h-pulse-mode:	Specifies the pulse mode option for the panel.
 					0 = Don't send hsa/he following vs/ve packet(default)
 					1 = Send hsa/he following vs/ve packet
@@ -192,6 +194,7 @@ Optional properties:
 					byte 7 and beyond: number byte of payload
 - qcom,partial-update-enabled:		Boolean used to enable partial
 					panel update for command mode panels.
+- qcom,ulps-enabled:			Boolean to enable support for Ultra Low Power State (ULPS) mode.
 
 Note, if a given optional qcom,* binding is not present, then the driver will configure
 the default values specified.
@@ -210,6 +213,7 @@ Example:
 		qcom,mdss-pan-underflow-clr = <0xff>;
 		qcom,mdss-pan-bl-levels = <1 15>;
 		qcom,mdss-pan-dsi-mode = <0>;
+		qcom,mdss-dsi-last-line-interleave;
 		qcom,mdss-pan-dsi-h-pulse-mode = <1>;
 		qcom,mdss-pan-dsi-h-power-stop = <1 1 1>;
 		qcom,mdss-pan-dsi-bllp-power-stop = <1 1>;
@@ -232,5 +236,6 @@ Example:
 		qcom,fbc-budget-ctl = <675 5 91>;
 		qcom,fbc-lossy-mode = <0 0xc0 0 3>;
 		qcom,partial-update-enabled;
+		qcom,ulps-enabled;
 	};
 };
