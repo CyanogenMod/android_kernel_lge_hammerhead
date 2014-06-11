@@ -1183,6 +1183,7 @@
 			05 01 00 00 32 00 01 28
 			05 01 00 00 64 00 01 10];
 		qcom,off-cmds-dsi-state = "DSI_HS_MODE";
+		qcom,ulps-enabled;
 	};
 
 	qcom,mdss_dsi_jdi_command_ors_j1 {
