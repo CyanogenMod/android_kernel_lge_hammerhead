@@ -414,7 +414,6 @@ static int mdss_mdp_cmd_wait4pingpong(struct mdss_mdp_ctl *ctl, void *arg)
 	unsigned long flags;
 	int need_wait = 0;
 	int rc = 0;
-	int flush_wq = (int) arg;
 
 	ctx = (struct mdss_mdp_cmd_ctx *) ctl->priv_data;
 	if (!ctx) {
@@ -443,9 +442,6 @@ static int mdss_mdp_cmd_wait4pingpong(struct mdss_mdp_ctl *ctl, void *arg)
 			rc = 0;
 		}
 	}
-
-	if (flush_wq)
-		flush_work_sync(&ctx->pp_done_work);
 
 	return rc;
 }
@@ -540,11 +536,9 @@ int mdss_mdp_cmd_stop(struct mdss_mdp_ctl *ctl)
 	if (cancel_work_sync(&ctx->clk_work))
 		pr_debug("no pending clk work\n");
 
-	mdss_mdp_cmd_wait4pingpong(ctl, NULL);
-
 	mdss_mdp_cmd_clk_off(ctx);
 
-	flush_work_sync(&ctx->pp_done_work);
+	flush_work(&ctx->pp_done_work);
 
 	ctx->panel_on = 0;
 
