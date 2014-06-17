@@ -1952,6 +1952,36 @@ static void mdss_mdp_parse_dt_fudge_factors(struct platform_device *pdev,
 	}
 }
 
+static int mdss_mdp_parse_dt_clk_levels(struct platform_device *pdev)
+{
+	int rc, len = 0;
+	char *prop_name = "qcom,mdss-clk-levels";
+	struct mdss_data_type *mdata = platform_get_drvdata(pdev);
+
+	of_find_property(pdev->dev.of_node, prop_name, &len);
+	if (len < 1)
+		return 0;
+
+	len = len/sizeof(u32);
+	mdata->nclk_lvl = len;
+
+	if (mdata->nclk_lvl) {
+		mdata->clock_levels = kzalloc(sizeof(u32) * mdata->nclk_lvl,
+					      GFP_KERNEL);
+		if (!mdata->clock_levels) {
+			pr_err("no mem assigned for mdata clock_levels\n");
+			return -ENOMEM;
+		}
+
+		rc = mdss_mdp_parse_dt_handler(pdev, prop_name, mdata->clock_levels,
+					       mdata->nclk_lvl);
+		if (rc)
+			pr_debug("clock levels not found\n");
+	}
+
+	return 0;
+}
+
 static int mdss_mdp_parse_dt_prefill(struct platform_device *pdev)
 {
 	struct mdss_data_type *mdata = platform_get_drvdata(pdev);
@@ -2084,22 +2114,9 @@ static int mdss_mdp_parse_dt_misc(struct platform_device *pdev)
 	if (rc)
 		pr_debug("max bandwidth (high) property not specified\n");
 
-	mdata->nclk_lvl = mdss_mdp_parse_dt_prop_len(pdev,
-					"qcom,mdss-clk-levels");
-
-	if (mdata->nclk_lvl) {
-		mdata->clock_levels = kzalloc(sizeof(u32) * mdata->nclk_lvl,
-							GFP_KERNEL);
-		if (!mdata->clock_levels) {
-			pr_err("no mem assigned for mdata clock_levels\n");
-			return -ENOMEM;
-		}
-
-		rc = mdss_mdp_parse_dt_handler(pdev, "qcom,mdss-clk-levels",
-			mdata->clock_levels, mdata->nclk_lvl);
-		if (rc)
-			pr_debug("clock levels not found\n");
-	}
+	rc = mdss_mdp_parse_dt_clk_levels(pdev);
+	if (rc)
+		pr_debug("clk levels property not specified\n");
 
 	return 0;
 }
