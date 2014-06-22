@@ -214,8 +214,8 @@ static int mdp3_ctrl_res_req_bus(struct msm_fb_data_type *mfd, int status)
 	int rc = 0;
 	if (status) {
 		struct mdss_panel_info *panel_info = mfd->panel_info;
-		int ab = 0;
-		int ib = 0;
+		u64 ab = 0;
+		u64 ib = 0;
 		ab = panel_info->xres * panel_info->yres * 4;
 		ab *= panel_info->mipi.frame_rate;
 		ib = (ab * 3) / 2;
@@ -535,9 +535,11 @@ static int mdp3_ctrl_off(struct msm_fb_data_type *mfd)
 off_error:
 	mdp3_session->status = 0;
 	mdp3_bufq_deinit(&mdp3_session->bufq_out);
+	if (mdp3_session->overlay.id != MSMFB_NEW_REQUEST) {
+		mdp3_session->overlay.id = MSMFB_NEW_REQUEST;
+		mdp3_bufq_deinit(&mdp3_session->bufq_in);
+	}
 	mutex_unlock(&mdp3_session->lock);
-	if (mdp3_session->overlay.id != MSMFB_NEW_REQUEST)
-		mdp3_overlay_unset(mfd, mdp3_session->overlay.id);
 	return 0;
 }
 
