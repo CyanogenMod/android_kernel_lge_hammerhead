@@ -764,7 +764,7 @@ void mdss_bus_bandwidth_ctrl(int enable)
 }
 EXPORT_SYMBOL(mdss_bus_bandwidth_ctrl);
 
-void mdss_mdp_clk_ctrl(int enable, int isr)
+void mdss_mdp_clk_ctrl(int enable)
 {
 	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
 	static int mdp_clk_cnt;
@@ -1068,9 +1068,9 @@ static int mdss_debug_dump_stats(void *data, char *buf, int len)
 static void mdss_debug_enable_clock(int on)
 {
 	if (on)
-		mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
+		mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON);
 	else
-		mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
+		mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF);
 }
 
 static int mdss_mdp_debug_init(struct mdss_data_type *mdata)
@@ -1196,11 +1196,11 @@ void mdss_mdp_footswitch_ctrl_splash(int on)
 			pr_debug("Enable MDP FS for splash.\n");
 			mdata->handoff_pending = true;
 			regulator_enable(mdata->fs);
-			mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
+			mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON);
 			mdss_hw_init(mdata);
 		} else {
 			pr_debug("Disable MDP FS for splash.\n");
-			mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
+			mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF);
 			regulator_disable(mdata->fs);
 			mdata->handoff_pending = false;
 		}
