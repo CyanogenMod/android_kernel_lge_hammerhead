@@ -57,8 +57,6 @@ struct cpufreq_interactive_cpuinfo {
 	bool limits_changed;
 };
 
-#define MIN_TIMER_JIFFIES 1UL
-
 static DEFINE_PER_CPU(struct cpufreq_interactive_cpuinfo, cpuinfo);
 
 /* realtime thread handles frequency scaling */
@@ -199,15 +197,12 @@ static void cpufreq_interactive_timer_resched(
  * The cpu_timer and cpu_slack_timer must be deactivated when calling this
  * function.
  */
-static void cpufreq_interactive_timer_start(int cpu, int time_override)
+static void cpufreq_interactive_timer_start(int cpu)
 {
 	struct cpufreq_interactive_cpuinfo *pcpu = &per_cpu(cpuinfo, cpu);
+	unsigned long expires = jiffies +
+		usecs_to_jiffies(pcpu->timer_rate);
 	unsigned long flags;
-	unsigned long expires;
-	if (time_override)
-		expires = jiffies + time_override;
-	else
-		expires = jiffies + usecs_to_jiffies(timer_rate);
 
 	pcpu->cpu_timer.expires = expires;
 	add_timer_on(&pcpu->cpu_timer, cpu);
@@ -1230,7 +1225,6 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
 	unsigned int j;
 	struct cpufreq_interactive_cpuinfo *pcpu;
 	struct cpufreq_frequency_table *freq_table;
-	unsigned long expire_time;
 
 	switch (event) {
 	case CPUFREQ_GOV_START:
@@ -1254,7 +1248,7 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
 			down_write(&pcpu->enable_sem);
 			del_timer_sync(&pcpu->cpu_timer);
 			del_timer_sync(&pcpu->cpu_slack_timer);
-			cpufreq_interactive_timer_start(j, 0);
+			cpufreq_interactive_timer_start(j);
 			pcpu->governor_enabled = 1;
 			up_write(&pcpu->enable_sem);
 		}
@@ -1317,51 +1311,38 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
 		for_each_cpu(j, policy->cpus) {
 			pcpu = &per_cpu(cpuinfo, j);
 
-			/* hold write semaphore to avoid race */
-			down_write(&pcpu->enable_sem);
+			down_read(&pcpu->enable_sem);
 			if (pcpu->governor_enabled == 0) {
-				up_write(&pcpu->enable_sem);
+				up_read(&pcpu->enable_sem);
 				continue;
 			}
 
-			/* update target_freq firstly */
+			spin_lock_irqsave(&pcpu->target_freq_lock, flags);
 			if (policy->max < pcpu->target_freq)
 				pcpu->target_freq = policy->max;
-			/*
-			 * Delete and reschedule timer.
-			 * Else the timer callback may return without
-			 * re-arming the timer when it fails to acquire
-			 * the semaphore. This race condition may cause the
-			 * timer to stop unexpectedly.
-			 */
-			del_timer_sync(&pcpu->cpu_timer);
-			del_timer_sync(&pcpu->cpu_slack_timer);
-			if (policy->min >= pcpu->target_freq) {
+			else if (policy->min > pcpu->target_freq)
 				pcpu->target_freq = policy->min;
-				/*
-				 * Reschedule timer.
-				 * The governor needs more time to evaluate
-				 * the load after changing policy parameters.
-				 */
-				cpufreq_interactive_timer_start(j, 0);
-			} else {
-				/*
-				 * Reschedule timer with variable duration.
-				 * No boost was applied so the governor
-				 * doesn't need extra time to evaluate load.
-				 * The timer can be set to fire quicker if it
-				 * was already going to expire soon.
-				 */
-				expire_time = pcpu->cpu_timer.expires - jiffies;
-				expire_time = min(usecs_to_jiffies(timer_rate),
-						  expire_time);
-				expire_time = max(MIN_TIMER_JIFFIES,
-						  expire_time);
 
-				cpufreq_interactive_timer_start(j, expire_time);
+			spin_unlock_irqrestore(&pcpu->target_freq_lock, flags);
+			up_read(&pcpu->enable_sem);
+
+			/* Reschedule timer only if policy->max is raised.
+			 * Delete the timers, else the timer callback may
+			 * return without re-arm the timer when failed
+			 * acquire the semaphore. This race may cause timer
+			 * stopped unexpectedly.
+			 */
+
+			if (policy->max > pcpu->max_freq) {
+				down_write(&pcpu->enable_sem);
+				del_timer_sync(&pcpu->cpu_timer);
+				del_timer_sync(&pcpu->cpu_slack_timer);
+				cpufreq_interactive_timer_start(j);
+				up_write(&pcpu->enable_sem);
 			}
+
+			pcpu->max_freq = policy->max;
 			pcpu->limits_changed = true;
-			up_write(&pcpu->enable_sem);
 		}
 		break;
 	}
