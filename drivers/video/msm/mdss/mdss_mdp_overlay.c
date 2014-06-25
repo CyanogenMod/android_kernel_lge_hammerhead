@@ -2637,11 +2637,6 @@ static int mdss_mdp_overlay_off(struct msm_fb_data_type *mfd)
 	need_cleanup = !list_empty(&mdp5_data->pipes_cleanup);
 	mutex_unlock(&mfd->lock);
 
-	if (need_cleanup) {
-		pr_debug("cleaning up pipes on fb%d\n", mfd->index);
-		mdss_mdp_overlay_kickoff(mfd, NULL);
-	}
-
 	if (mdp5_data->mdata->ulps) {
 		rc = mdss_mdp_footswitch_ctrl_ulps(1, &mfd->pdev->dev);
 		if (rc) {
@@ -2650,6 +2645,11 @@ static int mdss_mdp_overlay_off(struct msm_fb_data_type *mfd)
 			return rc;
 		}
 		mdss_mdp_ctl_restore(mdp5_data->ctl);
+	}
+
+	if (need_cleanup) {
+		pr_debug("cleaning up pipes on fb%d\n", mfd->index);
+		mdss_mdp_overlay_kickoff(mfd, NULL);
 	}
 
 	/*
