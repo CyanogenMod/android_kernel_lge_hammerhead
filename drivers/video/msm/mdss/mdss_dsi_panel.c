@@ -1234,6 +1234,9 @@ static void send_local_on_cmds(struct work_struct *work)
 	ctrl = container_of(cmds_panel_data, struct mdss_dsi_ctrl_pdata,
 			    panel_data);
 
+	if (cmds_panel_data->panel_info.cont_splash_enabled)
+		return;
+
 	if (local_pdata->on_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &local_pdata->on_cmds);
 
