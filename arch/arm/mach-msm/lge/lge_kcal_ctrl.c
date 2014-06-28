@@ -20,7 +20,7 @@
 
 #if defined(CONFIG_LCD_KCAL)
 
-static struct kcal_platform_data *kcal_pdata;
+struct kcal_platform_data *kcal_pdata;
 static int last_status_kcal_ctrl;
 
 static ssize_t kcal_store(struct device *dev, struct device_attribute *attr,
