@@ -46,12 +46,6 @@ enum lge_boot_mode_type {
 };
 
 #if defined(CONFIG_LCD_KCAL)
-struct kcal_data {
-		int red;
-		int green;
-		int blue;
-};
-
 struct kcal_platform_data {
 	int (*set_values) (int r, int g, int b);
 	int (*get_values) (int *r, int *g, int *b);

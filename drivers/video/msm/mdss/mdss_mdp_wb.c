@@ -471,8 +471,13 @@ static int mdss_mdp_wb_queue(struct msm_fb_data_type *mfd,
 
 	pr_debug("fb%d queue\n", wb->fb_ndx);
 
-	if (!mfd->panel_info->cont_splash_enabled)
-		mdss_iommu_attach(mdp5_data->mdata);
+	if (!mfd->panel_info->cont_splash_enabled) {
+		ret  = mdss_iommu_attach(mdp5_data->mdata);
+		if (ret) {
+			pr_err("mdss iommu attach failed rc=%d", ret);
+			return ret;
+		}
+	}
 
 	mutex_lock(&wb->lock);
 	if (local)
@@ -579,6 +584,8 @@ int mdss_mdp_wb_kickoff(struct msm_fb_data_type *mfd)
 
 	if (!ctl->power_on)
 		return 0;
+
+	memset(&wb_args, 0, sizeof(wb_args));
 
 	mutex_lock(&mdss_mdp_wb_buf_lock);
 	if (wb) {

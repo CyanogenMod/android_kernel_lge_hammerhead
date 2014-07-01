@@ -23,27 +23,13 @@
 
 #include "mdss.h"
 #include "mdss_mdp.h"
+#include "mdss_mdp_hwio.h"
 #include "mdss_debug.h"
 
 #define DEFAULT_BASE_REG_CNT 0x100
 #define GROUP_BYTES 4
 #define ROW_BYTES 16
-
-struct mdss_debug_data {
-	struct dentry *root;
-	struct list_head base_list;
-};
-
-struct mdss_debug_base {
-	struct mdss_debug_data *mdd;
-	void __iomem *base;
-	size_t off;
-	size_t cnt;
-	size_t max_offset;
-	char *buf;
-	size_t buf_len;
-	struct list_head head;
-};
+#define MAX_VSYNC_COUNT 0xFFFFFFF
 
 static int mdss_debug_base_open(struct inode *inode, struct file *file)
 {
@@ -128,11 +114,12 @@ static ssize_t mdss_debug_base_reg_write(struct file *file,
 		const char __user *user_buf, size_t count, loff_t *ppos)
 {
 	struct mdss_debug_base *dbg = file->private_data;
+	struct mdss_data_type *mdata = mdss_res;
 	size_t off;
 	u32 data, cnt;
 	char buf[24];
 
-	if (!dbg)
+	if (!dbg || !mdata)
 		return -ENODEV;
 
 	if (count >= sizeof(buf))
@@ -151,9 +138,13 @@ static ssize_t mdss_debug_base_reg_write(struct file *file,
 	if (off >= dbg->max_offset)
 		return -EFAULT;
 
-	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
+	if (mdata->debug_inf.debug_enable_clock)
+		mdata->debug_inf.debug_enable_clock(1);
+
 	writel_relaxed(data, dbg->base + off);
-	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
+
+	if (mdata->debug_inf.debug_enable_clock)
+		mdata->debug_inf.debug_enable_clock(0);
 
 	pr_debug("addr=%x data=%x\n", off, data);
 
@@ -164,9 +155,10 @@ static ssize_t mdss_debug_base_reg_read(struct file *file,
 			char __user *user_buf, size_t count, loff_t *ppos)
 {
 	struct mdss_debug_base *dbg = file->private_data;
+	struct mdss_data_type *mdata = mdss_res;
 	size_t len;
 
-	if (!dbg) {
+	if (!dbg || !mdata) {
 		pr_err("invalid handle\n");
 		return -ENODEV;
 	}
@@ -188,7 +180,9 @@ static ssize_t mdss_debug_base_reg_read(struct file *file,
 		ptr = dbg->base + dbg->off;
 		tot = 0;
 
-		mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
+		if (mdata->debug_inf.debug_enable_clock)
+			mdata->debug_inf.debug_enable_clock(1);
+
 		for (cnt = dbg->cnt; cnt > 0; cnt -= ROW_BYTES) {
 			hex_dump_to_buffer(ptr, min(cnt, ROW_BYTES),
 					   ROW_BYTES, GROUP_BYTES, dump_buf,
@@ -203,7 +197,8 @@ static ssize_t mdss_debug_base_reg_read(struct file *file,
 			if (tot >= dbg->buf_len)
 				break;
 		}
-		mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
+		if (mdata->debug_inf.debug_enable_clock)
+			mdata->debug_inf.debug_enable_clock(0);
 
 		dbg->buf_len = tot;
 	}
@@ -246,21 +241,23 @@ int mdss_debug_register_base(const char *name, void __iomem *base,
 	char dn[80] = "";
 	int prefix_len = 0;
 
-	if (!mdata || !mdata->debug_data)
+	if (!mdata || !mdata->debug_inf.debug_data)
 		return -ENODEV;
 
-	mdd = mdata->debug_data;
+	mdd = mdata->debug_inf.debug_data;
 
 	dbg = kzalloc(sizeof(*dbg), GFP_KERNEL);
 	if (!dbg)
 		return -ENOMEM;
 
+	if (name)
+		strlcpy(dbg->name, name, sizeof(dbg->name));
 	dbg->base = base;
 	dbg->max_offset = max_offset;
 	dbg->off = 0;
 	dbg->cnt = DEFAULT_BASE_REG_CNT;
 
-	if (name)
+	if (name && strcmp(name, "mdp"))
 		prefix_len = snprintf(dn, sizeof(dn), "%s_", name);
 
 	strlcpy(dn + prefix_len, "off", sizeof(dn) - prefix_len);
@@ -301,33 +298,11 @@ static int mdss_debug_stat_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static int mdss_debug_stat_ctl_dump(struct mdss_mdp_ctl *ctl,
-		char *bp, int len)
-{
-	int tot = 0;
-
-	if (!ctl->ref_cnt)
-		return 0;
-
-	if (ctl->intf_num) {
-		tot = scnprintf(bp, len,
-			"intf%d: play: %08u \tvsync: %08u \tunderrun: %08u\n",
-				ctl->intf_num, ctl->play_cnt,
-				ctl->vsync_cnt, ctl->underrun_cnt);
-	} else {
-		tot = scnprintf(bp, len, "wb: \tmode=%x \tplay: %08u\n",
-				ctl->opmode, ctl->play_cnt);
-	}
-
-	return tot;
-}
-
 static ssize_t mdss_debug_stat_read(struct file *file, char __user *buff,
 		size_t count, loff_t *ppos)
 {
 	struct mdss_data_type *mdata = file->private_data;
-	struct mdss_mdp_pipe *pipe;
-	int i, len, tot;
+	int len, tot;
 	char bp[512];
 
 	if (*ppos)
@@ -337,30 +312,11 @@ static ssize_t mdss_debug_stat_read(struct file *file, char __user *buff,
 
 	tot = scnprintf(bp, len, "\nmdp:\n");
 
-	for (i = 0; i < mdata->nctl; i++)
-		tot += mdss_debug_stat_ctl_dump(mdata->ctl_off + i,
-				bp + tot, len - tot);
-	tot += scnprintf(bp + tot, len - tot, "\n");
+	if (mdata->debug_inf.debug_dump_stats)
+		tot += mdata->debug_inf.debug_dump_stats(mdata,
+						bp + tot, len - tot);
 
-	for (i = 0; i < mdata->nvig_pipes; i++) {
-		pipe = mdata->vig_pipes + i;
-		tot += scnprintf(bp + tot, len - tot,
-			"VIG%d :   %08u\t", i, pipe->play_cnt);
-	}
-	tot += scnprintf(bp + tot, len - tot, "\n");
 
-	for (i = 0; i < mdata->nrgb_pipes; i++) {
-		pipe = mdata->rgb_pipes + i;
-		tot += scnprintf(bp + tot, len - tot,
-			"RGB%d :   %08u\t", i, pipe->play_cnt);
-	}
-	tot += scnprintf(bp + tot, len - tot, "\n");
-
-	for (i = 0; i < mdata->ndma_pipes; i++) {
-		pipe = mdata->dma_pipes + i;
-		tot += scnprintf(bp + tot, len - tot,
-			"DMA%d :   %08u\t", i, pipe->play_cnt);
-	}
 	tot += scnprintf(bp + tot, len - tot, "\n");
 
 	if (copy_to_user(buff, bp, tot))
@@ -401,7 +357,7 @@ int mdss_debugfs_init(struct mdss_data_type *mdata)
 {
 	struct mdss_debug_data *mdd;
 
-	if (mdata->debug_data) {
+	if (mdata->debug_inf.debug_data) {
 		pr_warn("mdss debugfs already initialized\n");
 		return -EBUSY;
 	}
@@ -424,44 +380,108 @@ int mdss_debugfs_init(struct mdss_data_type *mdata)
 	debugfs_create_file("stat", 0644, mdd->root, mdata, &mdss_stat_fops);
 
 	debugfs_create_u32("min_mdp_clk", 0644, mdd->root,
-		(u32 *)&mdata->min_mdp_clk);
+			(u32 *)&mdata->min_mdp_clk);
 
-	mdata->debug_data = mdd;
+	if (mdss_create_xlog_debug(mdd)) {
+		mdss_debugfs_cleanup(mdd);
+		return -ENODEV;
+	}
+
+	mdata->debug_inf.debug_data = mdd;
 
 	return 0;
 }
 
 int mdss_debugfs_remove(struct mdss_data_type *mdata)
 {
-	struct mdss_debug_data *mdd = mdata->debug_data;
+	struct mdss_debug_data *mdd = mdata->debug_inf.debug_data;
 
 	mdss_debugfs_cleanup(mdd);
+	mdata->debug_inf.debug_data = NULL;
 
 	return 0;
 }
 
+void mdss_dump_reg(char __iomem *base, int len)
+{
+	char *addr;
+	u32 x0, x4, x8, xc;
+	int i;
+
+	addr = base;
+	if (len % 16)
+		len += 16;
+	len /= 16;
+
+	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
+	for (i = 0; i < len; i++) {
+		x0 = readl_relaxed(addr+0x0);
+		x4 = readl_relaxed(addr+0x4);
+		x8 = readl_relaxed(addr+0x8);
+		xc = readl_relaxed(addr+0xc);
+		pr_info("%p : %08x %08x %08x %08x\n", addr, x0, x4, x8, xc);
+		addr += 16;
+	}
+	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
+}
+
+int vsync_count;
 static struct mdss_mdp_misr_map {
 	u32 ctrl_reg;
 	u32 value_reg;
 	u32 crc_op_mode;
 	u32 crc_index;
-	u32 crc_value[MISR_CRC_BATCH_SIZE];
+	bool use_ping;
+	bool is_ping_full;
+	bool is_pong_full;
+	struct mutex crc_lock;
+	u32 crc_ping[MISR_CRC_BATCH_SIZE];
+	u32 crc_pong[MISR_CRC_BATCH_SIZE];
 } mdss_mdp_misr_table[DISPLAY_MISR_MAX] = {
 	[DISPLAY_MISR_DSI0] = {
 		.ctrl_reg = MDSS_MDP_LP_MISR_CTRL_DSI0,
 		.value_reg = MDSS_MDP_LP_MISR_SIGN_DSI0,
+		.crc_op_mode = 0,
+		.crc_index = 0,
+		.use_ping = true,
+		.is_ping_full = false,
+		.is_pong_full = false,
 	},
 	[DISPLAY_MISR_DSI1] = {
 		.ctrl_reg = MDSS_MDP_LP_MISR_CTRL_DSI1,
 		.value_reg = MDSS_MDP_LP_MISR_SIGN_DSI1,
+		.crc_op_mode = 0,
+		.crc_index = 0,
+		.use_ping = true,
+		.is_ping_full = false,
+		.is_pong_full = false,
 	},
 	[DISPLAY_MISR_EDP] = {
 		.ctrl_reg = MDSS_MDP_LP_MISR_CTRL_EDP,
 		.value_reg = MDSS_MDP_LP_MISR_SIGN_EDP,
+		.crc_op_mode = 0,
+		.crc_index = 0,
+		.use_ping = true,
+		.is_ping_full = false,
+		.is_pong_full = false,
 	},
 	[DISPLAY_MISR_HDMI] = {
 		.ctrl_reg = MDSS_MDP_LP_MISR_CTRL_HDMI,
 		.value_reg = MDSS_MDP_LP_MISR_SIGN_HDMI,
+		.crc_op_mode = 0,
+		.crc_index = 0,
+		.use_ping = true,
+		.is_ping_full = false,
+		.is_pong_full = false,
+	},
+	[DISPLAY_MISR_MDP] = {
+		.ctrl_reg = MDSS_MDP_LP_MISR_CTRL_MDP,
+		.value_reg = MDSS_MDP_LP_MISR_SIGN_MDP,
+		.crc_op_mode = 0,
+		.crc_index = 0,
+		.use_ping = true,
+		.is_ping_full = false,
+		.is_pong_full = false,
 	},
 };
 
@@ -469,7 +489,7 @@ static inline struct mdss_mdp_misr_map *mdss_misr_get_map(u32 block_id)
 {
 	struct mdss_mdp_misr_map *map;
 
-	if (block_id > DISPLAY_MISR_LCDC) {
+	if (block_id > DISPLAY_MISR_MDP) {
 		pr_err("MISR Block id (%d) out of range\n", block_id);
 		return NULL;
 	}
@@ -483,23 +503,51 @@ static inline struct mdss_mdp_misr_map *mdss_misr_get_map(u32 block_id)
 	return map;
 }
 
-int mdss_misr_crc_set(struct mdss_data_type *mdata, struct mdp_misr *req)
+int mdss_misr_set(struct mdss_data_type *mdata,
+			struct mdp_misr *req,
+			struct mdss_mdp_ctl *ctl)
 {
 	struct mdss_mdp_misr_map *map;
-	u32 config = 0;
-
+	struct mdss_mdp_mixer *mixer;
+	u32 config = 0, val = 0;
+	u32 mixer_num = 0;
+	bool is_valid_wb_mixer = true;
 	map = mdss_misr_get_map(req->block_id);
 	if (!map) {
 		pr_err("Invalid MISR Block=%d\n", req->block_id);
 		return -EINVAL;
 	}
-
+	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
+	if (req->block_id == DISPLAY_MISR_MDP) {
+		mixer = mdss_mdp_mixer_get(ctl, MDSS_MDP_MIXER_MUX_DEFAULT);
+		mixer_num = mixer->num;
+		pr_debug("SET MDP MISR BLK to MDSS_MDP_LP_MISR_SEL_LMIX%d_GC\n",
+			req->block_id);
+		switch (mixer_num) {
+		case MDSS_MDP_INTF_LAYERMIXER0:
+			pr_debug("Use Layer Mixer 0 for WB CRC\n");
+			val = MDSS_MDP_LP_MISR_SEL_LMIX0_GC;
+			break;
+		case MDSS_MDP_INTF_LAYERMIXER1:
+			pr_debug("Use Layer Mixer 1 for WB CRC\n");
+			val = MDSS_MDP_LP_MISR_SEL_LMIX1_GC;
+			break;
+		case MDSS_MDP_INTF_LAYERMIXER2:
+			pr_debug("Use Layer Mixer 2 for WB CRC\n");
+			val = MDSS_MDP_LP_MISR_SEL_LMIX2_GC;
+			break;
+		default:
+			pr_err("Invalid Layer Mixer %d selected for WB CRC\n",
+				mixer_num);
+			is_valid_wb_mixer = false;
+			break;
+		}
+		if (is_valid_wb_mixer)
+			writel_relaxed(val,
+				mdata->mdp_base + MDSS_MDP_LP_MISR_SEL);
+	}
+	vsync_count = 0;
 	map->crc_op_mode = req->crc_op_mode;
-	memset(map->crc_value, 0, sizeof(map->crc_value));
-
-	pr_debug("MISR Config (BlockId %d) (Frame Count = %d)\n",
-		req->block_id, req->frame_count);
-
 	config = (MDSS_MDP_LP_MISR_CTRL_FRAME_COUNT_MASK & req->frame_count) |
 			(MDSS_MDP_LP_MISR_CTRL_ENABLE);
 
@@ -507,24 +555,32 @@ int mdss_misr_crc_set(struct mdss_data_type *mdata, struct mdp_misr *req)
 			mdata->mdp_base + map->ctrl_reg);
 	/* ensure clear is done */
 	wmb();
-	if (MISR_OP_BM == map->crc_op_mode) {
-		writel_relaxed(MISR_CRC_BATCH_CFG,
-			mdata->mdp_base + map->ctrl_reg);
-	} else {
-		writel_relaxed(config,
-			mdata->mdp_base + map->ctrl_reg);
 
-		config = readl_relaxed(mdata->mdp_base + map->ctrl_reg);
-		pr_debug("MISR_CTRL = 0x%x", config);
+	memset(map->crc_ping, 0, sizeof(map->crc_ping));
+	memset(map->crc_pong, 0, sizeof(map->crc_pong));
+	map->crc_index = 0;
+	map->use_ping = true;
+	map->is_ping_full = false;
+	map->is_pong_full = false;
+
+	if (MISR_OP_BM != map->crc_op_mode) {
+
+		writel_relaxed(config,
+				mdata->mdp_base + map->ctrl_reg);
+		pr_debug("MISR_CTRL = 0x%x",
+				readl_relaxed(mdata->mdp_base + map->ctrl_reg));
 	}
+	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
 	return 0;
 }
 
-int mdss_misr_crc_get(struct mdss_data_type *mdata, struct mdp_misr *resp)
+int mdss_misr_get(struct mdss_data_type *mdata,
+			struct mdp_misr *resp,
+			struct mdss_mdp_ctl *ctl)
 {
 	struct mdss_mdp_misr_map *map;
 	u32 status;
-	int ret = 0;
+	int ret = -1;
 	int i;
 
 	map = mdss_misr_get_map(resp->block_id);
@@ -532,35 +588,60 @@ int mdss_misr_crc_get(struct mdss_data_type *mdata, struct mdp_misr *resp)
 		pr_err("Invalid MISR Block=%d\n", resp->block_id);
 		return -EINVAL;
 	}
-
+	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
 	switch (map->crc_op_mode) {
 	case MISR_OP_SFM:
 	case MISR_OP_MFM:
 		ret = readl_poll_timeout(mdata->mdp_base + map->ctrl_reg,
 				status, status & MDSS_MDP_LP_MISR_CTRL_STATUS,
 				MISR_POLL_SLEEP, MISR_POLL_TIMEOUT);
-
-		pr_debug("Status of Get MISR_CTRL = 0x%x", status);
 		if (ret == 0) {
-			resp->crc_value[0] =
-				readl_relaxed(mdata->mdp_base + map->value_reg);
+			resp->crc_value[0] = readl_relaxed(mdata->mdp_base +
+				map->value_reg);
 			pr_debug("CRC %d=0x%x\n", resp->block_id,
-					resp->crc_value[0]);
+				resp->crc_value[0]);
+			writel_relaxed(0, mdata->mdp_base + map->ctrl_reg);
 		} else {
-			pr_warn("MISR %d busy with status 0x%x\n",
-					resp->block_id, status);
+			mdss_mdp_ctl_write(ctl, MDSS_MDP_REG_CTL_START, 1);
+			ret = readl_poll_timeout(mdata->mdp_base +
+					map->ctrl_reg, status,
+					status & MDSS_MDP_LP_MISR_CTRL_STATUS,
+					MISR_POLL_SLEEP, MISR_POLL_TIMEOUT);
+			if (ret == 0) {
+				resp->crc_value[0] =
+					readl_relaxed(mdata->mdp_base +
+					map->value_reg);
+			}
+			writel_relaxed(0, mdata->mdp_base + map->ctrl_reg);
 		}
 		break;
 	case MISR_OP_BM:
-		for (i = 0; i < MISR_CRC_BATCH_SIZE; i++)
-			resp->crc_value[i] = map->crc_value[i];
-		map->crc_index = 0;
+		if (map->is_ping_full) {
+			for (i = 0; i < MISR_CRC_BATCH_SIZE; i++)
+				resp->crc_value[i] = map->crc_ping[i];
+			memset(map->crc_ping, 0, sizeof(map->crc_ping));
+			map->is_ping_full = false;
+			ret = 0;
+		} else if (map->is_pong_full) {
+			for (i = 0; i < MISR_CRC_BATCH_SIZE; i++)
+				resp->crc_value[i] = map->crc_pong[i];
+			memset(map->crc_pong, 0, sizeof(map->crc_pong));
+			map->is_pong_full = false;
+			ret = 0;
+		} else {
+			pr_debug("mdss_mdp_misr_crc_get PING BUF %s\n",
+				map->is_ping_full ? "FULL" : "EMPTRY");
+			pr_debug("mdss_mdp_misr_crc_get PONG BUF %s\n",
+				map->is_pong_full ? "FULL" : "EMPTRY");
+		}
+		resp->crc_op_mode = map->crc_op_mode;
 		break;
 	default:
 		ret = -ENOSYS;
 		break;
 	}
 
+	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
 	return ret;
 }
 
@@ -568,22 +649,71 @@ int mdss_misr_crc_get(struct mdss_data_type *mdata, struct mdp_misr *resp)
 void mdss_misr_crc_collect(struct mdss_data_type *mdata, int block_id)
 {
 	struct mdss_mdp_misr_map *map;
-	u32 status, config;
+	u32 status = 0;
+	u32 crc = 0x0BAD0BAD;
+	bool crc_stored = false;
 
 	map = mdss_misr_get_map(block_id);
 	if (!map || (map->crc_op_mode != MISR_OP_BM))
 		return;
 
-	config = MISR_CRC_BATCH_CFG;
-
 	status = readl_relaxed(mdata->mdp_base + map->ctrl_reg);
-	if (status & MDSS_MDP_LP_MISR_CTRL_STATUS) {
-		map->crc_value[map->crc_index] =
-			readl_relaxed(mdata->mdp_base + map->value_reg);
-		map->crc_index++;
-		if (map->crc_index == MISR_CRC_BATCH_SIZE)
-			map->crc_index = 0;
-		config |= MDSS_MDP_LP_MISR_CTRL_STATUS_CLEAR;
+	if (MDSS_MDP_LP_MISR_CTRL_STATUS & status) {
+		crc = readl_relaxed(mdata->mdp_base + map->value_reg);
+		if (map->use_ping) {
+			if (map->is_ping_full) {
+				pr_err("PING Buffer FULL\n");
+			} else {
+				map->crc_ping[map->crc_index] = crc;
+				crc_stored = true;
+			}
+		} else {
+			if (map->is_pong_full) {
+				pr_err("PONG Buffer FULL\n");
+			} else {
+				map->crc_pong[map->crc_index] = crc;
+				crc_stored = true;
+			}
+		}
+
+		if (crc_stored) {
+			map->crc_index = (map->crc_index + 1);
+			if (map->crc_index == MISR_CRC_BATCH_SIZE) {
+				map->crc_index = 0;
+				if (true == map->use_ping) {
+					map->is_ping_full = true;
+					map->use_ping = false;
+				} else {
+					map->is_pong_full = true;
+					map->use_ping = true;
+				}
+				pr_debug("USE BUFF %s\n", map->use_ping ?
+					"PING" : "PONG");
+				pr_debug("mdss_misr_crc_collect PING BUF %s\n",
+					map->is_ping_full ? "FULL" : "EMPTRY");
+				pr_debug("mdss_misr_crc_collect PONG BUF %s\n",
+					map->is_pong_full ? "FULL" : "EMPTRY");
+			}
+		} else {
+			pr_err("CRC(%d) Not saved\n", crc);
+		}
+
+		writel_relaxed(MDSS_MDP_LP_MISR_CTRL_STATUS_CLEAR,
+				mdata->mdp_base + map->ctrl_reg);
+		writel_relaxed(MISR_CRC_BATCH_CFG,
+				mdata->mdp_base + map->ctrl_reg);
+	} else if (0 == status) {
+		writel_relaxed(MISR_CRC_BATCH_CFG,
+				mdata->mdp_base + map->ctrl_reg);
+		pr_debug("$$ Batch CRC Start $$\n");
 	}
-	writel_relaxed(config, mdata->mdp_base + map->ctrl_reg);
+	pr_debug("$$ Vsync Count = %d, CRC=0x%x Indx = %d$$\n",
+		vsync_count, crc, map->crc_index);
+
+	if (MAX_VSYNC_COUNT == vsync_count) {
+		pr_err("RESET vsync_count(%d)\n", vsync_count);
+		vsync_count = 0;
+	} else {
+		vsync_count += 1;
+	}
 }

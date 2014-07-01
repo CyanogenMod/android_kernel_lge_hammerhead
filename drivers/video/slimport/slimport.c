@@ -31,9 +31,15 @@
 #include <linux/slimport.h>
 #include <linux/async.h>
 #include <linux/of_platform.h>
+#include <linux/clk.h>
+#include <linux/clkdev.h>
+
+#include "../msm/mdss/mdss_hdmi_util.h"
 
 #include "slimport_private.h"
 #include "slimport_tx_drv.h"
+
+#define ANX7808_MAX_ACTIVE_H	1920
 
 struct anx7808_data {
 	struct i2c_client *client;
@@ -53,6 +59,8 @@ struct anx7808_data {
 	struct platform_device *hdmi_pdev;
 	struct msm_hdmi_sp_ops *hdmi_sp_ops;
 	bool update_chg_type;
+	struct clk *usb_clk;
+	atomic_t usb_clk_count;
 };
 
 struct anx7808_data *the_chip;
@@ -65,6 +73,76 @@ static bool hdcp_enable;
 
 struct completion init_aux_ch_completion;
 static uint32_t sp_tx_chg_current_ma = NORMAL_CHG_I_MA;
+static bool irq_enabled = 0;
+
+/* Link integrity check is sometimes failed without external the power.
+ * This is a workaround for this failure. Enabling the USB clk help
+ * this issue.
+ */
+static void anx7808_get_usb_clk(struct i2c_client *client)
+{
+	struct anx7808_data *anx7808 = i2c_get_clientdata(client);
+	struct device_node *dev_node = client->dev.of_node;
+	struct device_node *node;
+	struct platform_device *pdev;
+
+	node = of_parse_phandle(dev_node, "analogix,usb", 0);
+	if (!node) {
+		pr_warn("can't find dwc-usb3-msm phandle\n");
+		return;
+	}
+
+	pdev = of_find_device_by_node(node);
+	if (!pdev) {
+		pr_warn("can't find the device by node\n");
+		return;
+	}
+
+	anx7808->usb_clk = clk_get(&pdev->dev, "ref_clk");
+	if (IS_ERR(anx7808->usb_clk)) {
+		pr_warn("can't get usb3 ref_clk\n");
+		return;
+	}
+
+	atomic_set(&anx7808->usb_clk_count, 0);
+	pr_info("clk: %d\n", (int)clk_get_rate(anx7808->usb_clk));
+}
+
+static void anx7808_put_usb_clk(struct i2c_client *client)
+{
+	struct anx7808_data *anx7808 = i2c_get_clientdata(client);
+
+	if (anx7808->usb_clk) {
+		clk_put(anx7808->usb_clk);
+		anx7808->usb_clk = NULL;
+	}
+}
+
+static void anx7808_vote_usb_clk(void *data)
+{
+	struct anx7808_data *anx7808 = data;
+
+	if (!anx7808->usb_clk)
+		return;
+
+	if (1 == atomic_inc_return(&anx7808->usb_clk_count)) {
+		pr_info("usb clk is voted\n");
+		clk_prepare_enable(anx7808->usb_clk);
+	}
+}
+
+static void anx7808_unvote_usb_clk(void *data)
+{
+	struct anx7808_data *anx7808 = data;
+
+	if (!anx7808->usb_clk)
+		return;
+
+	if (1 == __atomic_add_unless(&anx7808->usb_clk_count, -1, 0)) {
+		pr_info("usb clk is unvoted\n");
+		clk_disable_unprepare(anx7808->usb_clk);
+	}
+}
 
 static int anx7808_avdd_3p3_power(struct anx7808_data *chip, int on)
 {
@@ -226,7 +304,6 @@ void sp_tx_hardware_powerdown(void)
 		if (status)
 			pr_err("failed to turn off hpd");
 	}
-
 	pr_info("anx7808 power down\n");
 }
 
@@ -555,6 +632,7 @@ static irqreturn_t anx7808_cbl_det_isr(int irq, void *data)
 	if (gpio_get_value(anx7808->gpio_cbl_det)) {
 		wake_lock(&anx7808->slimport_lock);
 		pr_info("detect cable insertion\n");
+		anx7808_vote_usb_clk(anx7808);
 		queue_delayed_work(anx7808->workqueue, &anx7808->work, 0);
 	} else {
 		pr_info("detect cable removal\n");
@@ -563,6 +641,7 @@ static irqreturn_t anx7808_cbl_det_isr(int irq, void *data)
 			flush_workqueue(anx7808->workqueue);
 		wake_unlock(&anx7808->slimport_lock);
 		wake_lock_timeout(&anx7808->slimport_lock, 2*HZ);
+		anx7808_unvote_usb_clk(anx7808);
 	}
 	return IRQ_HANDLED;
 }
@@ -578,6 +657,33 @@ static void anx7808_work_func(struct work_struct *work)
 			msecs_to_jiffies(300));
 #endif
 }
+
+static int anx7808_enable_irq(const char *val, const struct kernel_param *kp)
+{
+	int ret;
+
+	if (!the_chip)
+		return -ENODEV;
+
+	ret = param_set_bool(val, kp);
+	if (ret) {
+		pr_err("failed to enable slimpot\n");
+		return ret;
+	}
+
+	if (irq_enabled) {
+		anx7808_cbl_det_isr(the_chip->client->irq, the_chip);
+		enable_irq(the_chip->client->irq);
+	}
+
+	return 0;
+}
+
+static struct kernel_param_ops enable_irq_ops = {
+	.set = anx7808_enable_irq,
+	.get = param_get_bool,
+};
+module_param_cb(enable_irq, &enable_irq_ops, &irq_enabled, 0644);
 
 static int anx7808_parse_dt(struct device_node *node,
 			   struct anx7808_data *anx7808)
@@ -650,6 +756,25 @@ static int anx7808_parse_dt(struct device_node *node,
 
 out:
 	return ret;
+}
+
+static void anx7808_setup_video_mode_lut(void)
+{
+	int i;
+	struct msm_hdmi_mode_timing_info *temp_timing;
+
+	for (i = 0; i < HDMI_VFRMT_MAX; i++) {
+		temp_timing = (struct msm_hdmi_mode_timing_info *)
+				hdmi_get_supported_mode(i);
+		if (!temp_timing)
+			continue;
+
+		/* formats that exceed max active_h */
+		if (temp_timing->active_h > ANX7808_MAX_ACTIVE_H) {
+			pr_debug("disabled mode (%d)\n", temp_timing->active_h);
+			hdmi_del_supported_mode(i);
+		}
+	}
 }
 
 static int anx7808_i2c_probe(struct i2c_client *client,
@@ -771,13 +896,17 @@ static int anx7808_i2c_probe(struct i2c_client *client,
 		goto err5;
 	}
 
+	disable_irq(client->irq);
 	ret = enable_irq_wake(client->irq);
 	if (ret  < 0) {
 		pr_err("interrupt wake enable fail\n");
 		goto err6;
 	}
 
-	goto exit;
+	anx7808_setup_video_mode_lut();
+	anx7808_get_usb_clk(client);
+
+	return 0;
 
 err6:
 	free_irq(client->irq, anx7808);
@@ -804,6 +933,7 @@ static int anx7808_i2c_remove(struct i2c_client *client)
 {
 	struct anx7808_data *anx7808 = i2c_get_clientdata(client);
 
+	anx7808_put_usb_clk(client);
 	free_irq(client->irq, anx7808);
 	wake_lock_destroy(&anx7808->slimport_lock);
 	if (!anx7808->vdd_reg)
