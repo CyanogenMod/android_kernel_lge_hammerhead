@@ -2492,7 +2492,7 @@ int mdss_mdp_display_wait4pingpong(struct mdss_mdp_ctl *ctl)
 	}
 
 	if (ctl->wait_pingpong)
-		ret = ctl->wait_pingpong(ctl, (void*) 1);
+		ret = ctl->wait_pingpong(ctl, NULL);
 
 	mutex_unlock(&ctl->lock);
 
