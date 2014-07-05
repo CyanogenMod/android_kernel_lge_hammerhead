@@ -2385,7 +2385,7 @@ bool mdss_is_ready(void)
 {
 	return mdss_mdp_get_mdata() ? true : false;
 }
-EXPORT_SYMBOL(mdss_mdp_get_mdata);
+EXPORT_SYMBOL(mdss_is_ready);
 
 /**
  * mdss_panel_intf_type() - checks if a given intf type is primary
