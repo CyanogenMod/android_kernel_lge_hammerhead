@@ -95,9 +95,9 @@ static void __init msm8974_early_memory(void)
 }
 
 #if defined(CONFIG_LCD_KCAL)
-extern int g_kcal_r;
-extern int g_kcal_g;
-extern int g_kcal_b;
+int g_kcal_r;
+int g_kcal_g;
+int g_kcal_b;
 
 int kcal_set_values(int kcal_r, int kcal_g, int kcal_b)
 {
