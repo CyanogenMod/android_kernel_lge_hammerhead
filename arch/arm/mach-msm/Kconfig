@@ -1877,6 +1877,12 @@ config MSM_CPU_FREQ_MIN
 
 endif # CPU_FREQ_MSM
 
+config MSM_CPU_VOLTAGE_CONTROL
+	bool "Userspace CPU Voltage Control"
+	default y
+	help
+	  This enables userspace CPU Voltage Control.
+
 config MSM_DEVFREQ_CPUBW
 	bool "Devfreq device for CPU<->DDR IB/AB BW voting"
 	depends on PM_DEVFREQ
@@ -3042,4 +3048,12 @@ config KRAIT_REGULATOR
 	 line from the PMIC. This supply line is powered by multiple
 	 regulators running in ganged mode inside the PMIC. Enable
 	 this option to support such configurations.
+
+config FORCE_FAST_CHARGE
+	bool "Force AC charge mode at will"
+	default y
+	help
+	  A simple sysfs interface to force adapters that
+	  are detected as USB to charge as AC.
+
 endif
