@@ -1340,7 +1340,6 @@ static int mdss_mdp_overlay_queue(struct msm_fb_data_type *mfd,
 		pr_warn("Unexpected buffer queue to a solid fill pipe\n");
 
 	flags = (pipe->flags & MDP_SECURE_OVERLAY_SESSION);
-	flags |= (pipe->flags & MDP_SECURE_DISPLAY_OVERLAY_SESSION);
 
 	if (!mfd->panel_info->cont_splash_enabled) {
 		ret = mdss_iommu_attach(mdata);
@@ -2958,12 +2957,6 @@ int mdss_mdp_overlay_init(struct msm_fb_data_type *mfd)
 		goto init_fail;
 	}
 
-	rc = sysfs_create_link_nowarn(&dev->kobj,
-			&mdp5_data->mdata->pdev->dev.kobj, "mdp");
-	if (rc)
-		pr_warn("problem creating link to mdp sysfs\n");
-
-	mfd->mdp_sync_pt_data.async_wait_fences = true;
 	if (mfd->panel_info->type == MIPI_CMD_PANEL) {
 		rc = __vsync_retire_setup(mfd);
 		if (IS_ERR_VALUE(rc)) {
@@ -2971,7 +2964,12 @@ int mdss_mdp_overlay_init(struct msm_fb_data_type *mfd)
 			goto init_fail;
 		}
 	}
+
 	mfd->mdp_sync_pt_data.async_wait_fences = true;
+	rc = sysfs_create_link_nowarn(&dev->kobj,
+			&mdp5_data->mdata->pdev->dev.kobj, "mdp");
+	if (rc)
+		pr_warn("problem creating link to mdp sysfs\n");
 
 	pm_runtime_set_suspended(&mfd->pdev->dev);
 	pm_runtime_enable(&mfd->pdev->dev);
