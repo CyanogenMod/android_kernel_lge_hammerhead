@@ -46,6 +46,8 @@ ifndef CONFIG_MSM_SMP
 obj-$(CONFIG_ARCH_MSM_SCORPION) += msm_fault_handlers.o
 endif
 
+obj-$(CONFIG_SIMPLE_PLUG) += simple_plug.o
+
 obj-$(CONFIG_MSM_VIC) += irq-vic.o
 
 ifdef CONFIG_ARCH_QSD8X50
