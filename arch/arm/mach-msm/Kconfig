@@ -3042,4 +3042,19 @@ config KRAIT_REGULATOR
 	 line from the PMIC. This supply line is powered by multiple
 	 regulators running in ganged mode inside the PMIC. Enable
 	 this option to support such configurations.
+
+config SIMPLE_PLUG
+	bool "Enable simple-plug cpu hotplug driver"
+	default n
+	help
+	  Generic simple-plug cpu hotplug driver for ARM SOCs
+
+config SIMPLE_PLUG_STATS
+	bool "Enable simple-plug run-time statistics"
+	depends on SIMPLE_PLUG
+	default n
+	help
+	  This adds a slight CPU cost and therefore is disabled
+	  by default.
+
 endif
