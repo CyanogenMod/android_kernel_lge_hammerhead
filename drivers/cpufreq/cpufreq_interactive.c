@@ -78,11 +78,16 @@ static unsigned long go_hispeed_load = DEFAULT_GO_HISPEED_LOAD;
 static unsigned int sampling_down_factor;
 
 /* Target load.  Lower values result in higher CPU speeds. */
+
+static spinlock_t target_loads_lock;
+
 #define DEFAULT_TARGET_LOAD 90
 static unsigned int default_target_loads[] = {DEFAULT_TARGET_LOAD};
-static spinlock_t target_loads_lock;
 static unsigned int *target_loads = default_target_loads;
 static int ntarget_loads = ARRAY_SIZE(default_target_loads);
+
+static unsigned int *target_loads_down = NULL;
+static int ntarget_loads_down = 0;
 
 /*
  * The minimum amount of time to spend at a frequency before we can ramp down.
@@ -264,13 +269,32 @@ static unsigned int freq_to_targetload(unsigned int freq)
 	return ret;
 }
 
+static unsigned int freq_to_target_load_down(unsigned int freq)
+{
+	int i;
+	unsigned int ret;
+	unsigned long flags;
+
+	if (! ntarget_loads_down)
+		return freq_to_targetload(freq);
+
+	spin_lock_irqsave(&target_loads_lock, flags);
+
+	for (i = 0; i < ntarget_loads_down - 1 && freq >= target_loads_down[i+1]; i += 2)
+		;
+
+	ret = target_loads_down[i];
+	spin_unlock_irqrestore(&target_loads_lock, flags);
+	return ret;
+}
+
 /*
  * If increasing frequencies never map to a lower target load then
  * choose_freq() will find the minimum frequency that does not exceed its
  * target load given the current load.
  */
 
-static unsigned int choose_freq(
+static unsigned int choose_freq_iterative(
 	struct cpufreq_interactive_cpuinfo *pcpu, unsigned int loadadjfreq)
 {
 	unsigned int freq = pcpu->policy->cur;
@@ -353,6 +377,45 @@ static unsigned int choose_freq(
 	} while (freq != prevfreq);
 
 	return freq;
+}
+
+static unsigned int find_valid_freq_l(struct cpufreq_interactive_cpuinfo *pcpu, unsigned int target)
+{
+	unsigned int index;
+
+	if (cpufreq_frequency_table_target(pcpu->policy, pcpu->freq_table,
+		    target, CPUFREQ_RELATION_L, &index))
+		return target;
+
+	return pcpu->freq_table[index].frequency;
+}
+
+static unsigned int choose_freq_up_down(
+	struct cpufreq_interactive_cpuinfo *pcpu, unsigned int loadadjfreq)
+{
+	unsigned int new_freq;
+	unsigned int cur_freq = pcpu->policy->cur;
+
+	new_freq = loadadjfreq / freq_to_targetload(cur_freq);
+	new_freq = find_valid_freq_l(pcpu, new_freq);
+	if (new_freq >= cur_freq)
+		return new_freq;
+
+	new_freq = loadadjfreq / freq_to_target_load_down(cur_freq);
+	new_freq = find_valid_freq_l(pcpu, new_freq);
+	if (new_freq < cur_freq)
+		return new_freq;
+
+	return cur_freq;
+}
+
+static unsigned int choose_freq(
+	struct cpufreq_interactive_cpuinfo *pcpu, unsigned int loadadjfreq)
+{
+	if (ntarget_loads_down)
+		return choose_freq_up_down(pcpu, loadadjfreq);
+	else
+		return choose_freq_iterative(pcpu, loadadjfreq);
 }
 
 static u64 update_load(int cpu)
@@ -851,6 +914,52 @@ static struct global_attr target_loads_attr =
 	__ATTR(target_loads, S_IRUGO | S_IWUSR,
 		show_target_loads, store_target_loads);
 
+static ssize_t show_target_loads_down(
+	struct kobject *kobj, struct attribute *attr, char *buf)
+{
+	int i;
+	ssize_t ret = 0;
+	unsigned long flags;
+
+	spin_lock_irqsave(&target_loads_lock, flags);
+
+	for (i = 0; i < ntarget_loads_down; i++)
+		ret += sprintf(buf + ret, "%u%s", target_loads_down[i],
+			       i & 0x1 ? ":" : " ");
+
+	if (ret)
+		ret--;	/* remove trailing space */
+
+	sprintf(buf + ret, "\n");
+	spin_unlock_irqrestore(&target_loads_lock, flags);
+	return ret;
+}
+
+static ssize_t store_target_loads_down(
+	struct kobject *kobj, struct attribute *attr, const char *buf,
+	size_t count)
+{
+	int ntokens;
+	unsigned int *new_target_loads_down = NULL;
+	unsigned long flags;
+
+	new_target_loads_down = get_tokenized_data(buf, &ntokens);
+	if (IS_ERR(new_target_loads_down))
+		return PTR_RET(new_target_loads_down);
+
+	spin_lock_irqsave(&target_loads_lock, flags);
+	if (target_loads_down)
+		kfree(target_loads_down);
+	target_loads_down = new_target_loads_down;
+	ntarget_loads_down = ntokens;
+	spin_unlock_irqrestore(&target_loads_lock, flags);
+	return count;
+}
+
+static struct global_attr target_loads_down_attr =
+	__ATTR(target_loads_down, S_IRUGO | S_IWUSR,
+		show_target_loads_down, store_target_loads_down);
+
 static ssize_t show_above_hispeed_delay(
 	struct kobject *kobj, struct attribute *attr, char *buf)
 {
@@ -1197,6 +1306,7 @@ static struct global_attr up_threshold_any_cpu_freq_attr =
 
 static struct attribute *interactive_attributes[] = {
 	&target_loads_attr.attr,
+	&target_loads_down_attr.attr,
 	&above_hispeed_delay_attr.attr,
 	&hispeed_freq_attr.attr,
 	&go_hispeed_load_attr.attr,
