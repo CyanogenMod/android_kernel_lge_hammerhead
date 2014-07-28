@@ -365,6 +365,11 @@ struct rq {
 #endif
 	int skip_clock_update;
 
+	/* time-based average load */
+	u64 nr_last_stamp;
+	unsigned int ave_nr_running;
+	seqcount_t ave_seqcnt;
+
 	/* capture load from *all* tasks on this cpu: */
 	struct load_weight load;
 	unsigned long nr_load_updates;
@@ -926,16 +931,49 @@ extern void cpuacct_charge(struct task_struct *tsk, u64 cputime);
 static inline void cpuacct_charge(struct task_struct *tsk, u64 cputime) {}
 #endif
 
+/* 27 ~= 134217728ns = 134.2ms
+ * 26 ~=  67108864ns =  67.1ms
+ * 25 ~=  33554432ns =  33.5ms
+ * 24 ~=  16777216ns =  16.8ms
+ */
+#define NR_AVE_PERIOD_EXP	27
+#define NR_AVE_SCALE(x)		((x) << FSHIFT)
+#define NR_AVE_PERIOD		(1 << NR_AVE_PERIOD_EXP)
+#define NR_AVE_DIV_PERIOD(x)	((x) >> NR_AVE_PERIOD_EXP)
+
+static inline unsigned int do_avg_nr_running(struct rq *rq)
+{
+	s64 nr, deltax;
+	unsigned int ave_nr_running = rq->ave_nr_running;
+
+	deltax = rq->clock_task - rq->nr_last_stamp;
+	nr = NR_AVE_SCALE(rq->nr_running);
+
+	if (deltax > NR_AVE_PERIOD)
+		ave_nr_running = nr;
+	else
+		ave_nr_running +=
+			NR_AVE_DIV_PERIOD(deltax * (nr - ave_nr_running));
+
+	return ave_nr_running;
+}
+
 static inline void inc_nr_running(struct rq *rq)
 {
-	sched_update_nr_prod(cpu_of(rq), rq->nr_running, true);
+	write_seqcount_begin(&rq->ave_seqcnt);
+	rq->ave_nr_running = do_avg_nr_running(rq);
+	rq->nr_last_stamp = rq->clock_task;
 	rq->nr_running++;
+	write_seqcount_end(&rq->ave_seqcnt);
 }
 
 static inline void dec_nr_running(struct rq *rq)
 {
-	sched_update_nr_prod(cpu_of(rq), rq->nr_running, false);
+	write_seqcount_begin(&rq->ave_seqcnt);
+	rq->ave_nr_running = do_avg_nr_running(rq);
+	rq->nr_last_stamp = rq->clock_task;
 	rq->nr_running--;
+	write_seqcount_end(&rq->ave_seqcnt);
 }
 
 extern void update_rq_clock(struct rq *rq);
