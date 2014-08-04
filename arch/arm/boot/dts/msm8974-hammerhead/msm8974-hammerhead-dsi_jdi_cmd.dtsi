@@ -12,7 +12,7 @@
 
 &mdss_mdp {
 	dsi_jdi_command_ors: qcom,mdss_dsi_jdi_command_ors {
-		label = "JDI 1080p command mode dsi panel";
+		qcom,mdss-dsi-panel-name = "JDI 1080p command mode dsi panel";
 		qcom,mdss-panel-id = <5>;
 		qcom,mdss-dsi-panel-controller = <&mdss_dsi0>;
 		qcom,mdss-dsi-panel-type = "dsi_cmd_mode";
