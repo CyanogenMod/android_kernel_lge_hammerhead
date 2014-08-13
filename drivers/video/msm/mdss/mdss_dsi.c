@@ -28,6 +28,8 @@
 #include "mdss_dsi.h"
 #include "mdss_debug.h"
 
+extern struct mdss_dsi_ctrl_pdata *local_ctrl;
+
 static unsigned char *mdss_dsi_base;
 static int mdss_dsi_use_vdd_supply = 1;
 
@@ -1225,6 +1227,8 @@ int dsi_panel_device_register(struct platform_device *pdev,
 			ctrl_pdata->ctrl_base, ctrl_pdata->reg_size);
 		ctrl_pdata->ndx = 1;
 	}
+
+	local_ctrl = ctrl_pdata;
 
 	pr_debug("%s: Panal data initialized\n", __func__);
 	return 0;
