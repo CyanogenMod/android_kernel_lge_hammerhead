@@ -196,7 +196,7 @@ char *rev_str[] = {"evb1", "evb2", "rev_a", "rev_b", "rev_c", "rev_d",
 	"rev_e", "rev_f", "rev_g", "rev_h", "rev_10", "rev_11", "rev_12",
 	"revserved"};
 
-static int __init board_revno_setup(char *rev_info)
+int __init board_revno_setup(char *rev_info)
 {
 	int i;
 
