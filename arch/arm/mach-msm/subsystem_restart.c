@@ -39,7 +39,9 @@
 #include <mach/socinfo.h>
 #include <mach/subsystem_notif.h>
 #include <mach/subsystem_restart.h>
-
+#ifdef CONFIG_LGE_HANDLE_PANIC
+#include <mach/lge_handle_panic.h>
+#endif
 #include "smd_private.h"
 
 static int enable_debug;
@@ -388,6 +390,10 @@ static void do_epoch_check(struct subsys_device *dev)
 	if (time_first && n >= max_restarts_check) {
 		if ((curr_time->tv_sec - time_first->tv_sec) <
 				max_history_time_check)
+#ifdef CONFIG_LGE_HANDLE_PANIC
+			lge_set_magic_subsystem(dev->desc->name,
+					LGE_ERR_SUB_SD);
+#endif
 			panic("Subsystems have crashed %d times in less than "
 				"%ld seconds!", max_restarts_check,
 				max_history_time_check);
@@ -443,9 +449,13 @@ static void subsystem_shutdown(struct subsys_device *dev, void *data)
 	const char *name = dev->desc->name;
 
 	pr_info("[%p]: Shutting down %s\n", current, name);
-	if (dev->desc->shutdown(dev->desc) < 0)
+	if (dev->desc->shutdown(dev->desc) < 0) {
+#ifdef CONFIG_LGE_HANDLE_PANIC
+		lge_set_magic_subsystem(name, LGE_ERR_SUB_SD);
+#endif
 		panic("subsys-restart: [%p]: Failed to shutdown %s!",
 			current, name);
+	}
 	subsys_set_state(dev, SUBSYS_OFFLINE);
 }
 
@@ -468,6 +478,9 @@ static void subsystem_powerup(struct subsys_device *dev, void *data)
 	init_completion(&dev->err_ready);
 
 	if (dev->desc->powerup(dev->desc) < 0) {
+#ifdef CONFIG_LGE_HANDLE_PANIC
+		lge_set_magic_subsystem(name, LGE_ERR_SUB_PWR);
+#endif
 		notify_each_subsys_device(&dev, 1, SUBSYS_POWERUP_FAILURE,
 								NULL);
 		panic("[%p]: Powerup error: %s!", current, name);
@@ -475,6 +488,9 @@ static void subsystem_powerup(struct subsys_device *dev, void *data)
 
 	ret = wait_for_err_ready(dev);
 	if (ret) {
+#ifdef CONFIG_LGE_HANDLE_PANIC
+		lge_set_magic_subsystem(name, LGE_ERR_SUB_PWR);
+#endif
 		notify_each_subsys_device(&dev, 1, SUBSYS_POWERUP_FAILURE,
 								NULL);
 		panic("[%p]: Timed out waiting for error ready: %s!",
@@ -736,6 +752,9 @@ static void __subsystem_restart_dev(struct subsys_device *dev)
 			wake_lock(&dev->wake_lock);
 			queue_work(ssr_wq, &dev->work);
 		} else {
+#ifdef CONFIG_LGE_HANDLE_PANIC
+			lge_set_magic_subsystem(name, LGE_ERR_SUB_SD);
+#endif
 			panic("Subsystem %s crashed during SSR!", name);
 		}
 	}
@@ -745,6 +764,9 @@ static void __subsystem_restart_dev(struct subsys_device *dev)
 int subsystem_restart_dev(struct subsys_device *dev)
 {
 	const char *name;
+#ifdef CONFIG_LGE_HANDLE_PANIC
+	int saved_restart_level = dev->restart_level;
+#endif
 
 	if (!get_device(&dev->dev))
 		return -ENODEV;
@@ -767,6 +789,12 @@ int subsystem_restart_dev(struct subsys_device *dev)
 		return -EBUSY;
 	}
 
+#ifdef CONFIG_LGE_HANDLE_PANIC
+	if (lge_is_crash_skipped()) {
+		pr_info("Restart requested intentionally\n");
+		dev->restart_level = RESET_SUBSYS_COUPLED;
+	}
+#endif
 	pr_info("Restart sequence requested for %s, restart_level = %s.\n",
 		name, restart_levels[dev->restart_level]);
 
@@ -774,11 +802,23 @@ int subsystem_restart_dev(struct subsys_device *dev)
 
 	case RESET_SUBSYS_COUPLED:
 		__subsystem_restart_dev(dev);
+#ifdef CONFIG_LGE_HANDLE_PANIC
+		if (lge_is_crash_skipped()) {
+			dev->restart_level = saved_restart_level;
+			lge_clear_crash_skipped();
+		}
+#endif
 		break;
 	case RESET_SOC:
+#ifdef CONFIG_LGE_HANDLE_PANIC
+		lge_set_magic_subsystem(name, LGE_ERR_SUB_RST);
+#endif
 		panic("subsys-restart: Resetting the SoC - %s crashed.", name);
 		break;
 	default:
+#ifdef CONFIG_LGE_HANDLE_PANIC
+		lge_set_magic_subsystem(name, LGE_ERR_SUB_UNK);
+#endif
 		panic("subsys-restart: Unknown restart level!\n");
 		break;
 	}

@@ -107,9 +107,8 @@
 		cell-index = <0>;
 		compatible = "qcom,vfe40";
 		reg = <0xfda10000 0x1000>,
-			<0xfda40000 0x200>,
-			<0xfd4a8000 0x4>;
-		reg-names = "vfe", "vfe_vbif", "tcsr";
+			<0xfda40000 0x200>;
+		reg-names = "vfe", "vfe_vbif";
 		interrupts = <0 57 0>;
 		interrupt-names = "vfe";
 		vdd-supply = <&gdsc_vfe>;
@@ -119,9 +118,8 @@
 		cell-index = <1>;
 		compatible = "qcom,vfe40";
 		reg = <0xfda14000 0x1000>,
-			<0xfda40000 0x200>,
-			<0xfd4a8000 0x4>;
-		reg-names = "vfe", "vfe_vbif", "tcsr";
+			<0xfda40000 0x200>;
+		reg-names = "vfe", "vfe_vbif";
 		interrupts = <0 58 0>;
 		interrupt-names = "vfe";
 		vdd-supply = <&gdsc_vfe>;
@@ -176,6 +174,49 @@
 		vdd-supply = <&gdsc_vfe>;
 	};
 
+	led_flash0: qcom,camera-led-flash {
+		cell-index = <0>;
+		compatible = "qcom,camera-led-flash";
+		qcom,flash-type = <1>;
+		qcom,flash-source = <&pm8941_flash0 &pm8941_flash1>;
+		qcom,torch-source = <&pm8941_torch>;
+	};
+
+	qcom,ois@48 {
+		cell-index = <998>;
+		reg = <0x48 0x0>;
+		compatible = "qcom,ois";
+		qcom,cci-master = <0>;
+	};
+
+	cci_master0: qcom,cci_master_0 {
+		qcom,hw-thigh = <20>;
+		qcom,hw-tlow = <28>;
+		qcom,hw-tsu-sto = <21>;
+		qcom,hw-tsu-sta = <21>;
+		qcom,hw-thd-dat = <13>;
+		qcom,hw-thd-sta = <18>;
+		qcom,hw-tbuf = <25>;
+		qcom,hw-scl-stretch-en = <0>;
+		qcom,hw-trdhld = <6>;
+		qcom,hw-tsp = <3>;
+		status = "ok";
+	};
+
+	cci_master1: qcom,cci_master_1 {
+		qcom,hw-thigh = <20>;
+		qcom,hw-tlow = <28>;
+		qcom,hw-tsu-sto = <21>;
+		qcom,hw-tsu-sta = <21>;
+		qcom,hw-thd-dat = <13>;
+		qcom,hw-thd-sta = <18>;
+		qcom,hw-tbuf = <25>;
+		qcom,hw-scl-stretch-en = <0>;
+		qcom,hw-trdhld = <6>;
+		qcom,hw-tsp = <3>;
+		status = "ok";
+	};
+
 	cci: qcom,cci@fda0C000 {
 		cell-index = <0>;
 		compatible = "qcom,cci";
@@ -195,39 +236,7 @@
 				      "CCI_I2C_CLK0",
 				      "CCI_I2C_DATA1",
 				      "CCI_I2C_CLK1";
-		master0: qcom,cci-master0 {
-			status = "disabled";
-		};
-		master1: qcom,cci-master1 {
-			status = "disabled";
-		};
+		qcom,cci-master0 = <&cci_master0>;
+		qcom,cci-master1 = <&cci_master1>;
 	};
-};
-
-&master0 {
-	qcom,hw-thigh = <78>;
-	qcom,hw-tlow = <114>;
-	qcom,hw-tsu-sto = <28>;
-	qcom,hw-tsu-sta = <28>;
-	qcom,hw-thd-dat = <10>;
-	qcom,hw-thd-sta = <77>;
-	qcom,hw-tbuf = <118>;
-	qcom,hw-scl-stretch-en = <0>;
-	qcom,hw-trdhld = <6>;
-	qcom,hw-tsp = <1>;
-	status = "ok";
-};
-
-&master1 {
-	qcom,hw-thigh = <78>;
-	qcom,hw-tlow = <114>;
-	qcom,hw-tsu-sto = <28>;
-	qcom,hw-tsu-sta = <28>;
-	qcom,hw-thd-dat = <10>;
-	qcom,hw-thd-sta = <77>;
-	qcom,hw-tbuf = <118>;
-	qcom,hw-scl-stretch-en = <0>;
-	qcom,hw-trdhld = <6>;
-	qcom,hw-tsp = <1>;
-	status = "ok";
 };
