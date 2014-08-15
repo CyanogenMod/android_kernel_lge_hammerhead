@@ -1,8 +1,6 @@
 /*
- * BT-AMP (BlueTooth Alternate Mac and Phy) 802.11 PAL (Protocol Adaptation Layer)
+ * Copyright (C) 1999-2013, Broadcom Corporation
  *
- * Copyright (C) 1999-2012, Broadcom Corporation
- * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
  * under the terms of the GNU General Public License version 2 (the "GPL"),
@@ -16,30 +14,39 @@
  * the license of that module.  An independent module is a module which is not
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
- * 
+ *
  *      Notwithstanding the above, under no circumstances may you combine this
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: 802.11_bta.h 294267 2011-11-04 23:41:52Z $
-*/
+ * Fundamental constants relating to 802.3
+ *
+ * $Id: 802.3.h 417942 2013-08-13 07:53:57Z $
+ */
 
-#ifndef _802_11_BTA_H_
-#define _802_11_BTA_H_
+#ifndef _802_3_h_
+#define _802_3_h_
 
-#define BT_SIG_SNAP_MPROT		"\xAA\xAA\x03\x00\x19\x58"
+/* This marks the start of a packed structure section. */
+#include <packed_section_start.h>
 
-/* BT-AMP 802.11 PAL Protocols */
-#define BTA_PROT_L2CAP				1
-#define	BTA_PROT_ACTIVITY_REPORT		2
-#define BTA_PROT_SECURITY			3
-#define BTA_PROT_LINK_SUPERVISION_REQUEST	4
-#define BTA_PROT_LINK_SUPERVISION_REPLY		5
+#define SNAP_HDR_LEN	6	/* 802.3 SNAP header length */
+#define DOT3_OUI_LEN	3	/* 802.3 oui length */
 
-/* BT-AMP 802.11 PAL AMP_ASSOC Type IDs */
-#define BTA_TYPE_ID_MAC_ADDRESS			1
-#define BTA_TYPE_ID_PREFERRED_CHANNELS		2
-#define BTA_TYPE_ID_CONNECTED_CHANNELS		3
-#define BTA_TYPE_ID_CAPABILITIES		4
-#define BTA_TYPE_ID_VERSION			5
-#endif /* _802_11_bta_h_ */
+BWL_PRE_PACKED_STRUCT struct dot3_mac_llc_snap_header {
+	uint8	ether_dhost[ETHER_ADDR_LEN];	/* dest mac */
+	uint8	ether_shost[ETHER_ADDR_LEN];	/* src mac */
+	uint16	length;				/* frame length incl header */
+	uint8	dsap;				/* always 0xAA */
+	uint8	ssap;				/* always 0xAA */
+	uint8	ctl;				/* always 0x03 */
+	uint8	oui[DOT3_OUI_LEN];		/* RFC1042: 0x00 0x00 0x00
+						 * Bridge-Tunnel: 0x00 0x00 0xF8
+						 */
+	uint16	type;				/* ethertype */
+} BWL_POST_PACKED_STRUCT;
+
+/* This marks the end of a packed structure section. */
+#include <packed_section_end.h>
+
+#endif	/* #ifndef _802_3_h_ */
