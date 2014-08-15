@@ -51,9 +51,17 @@
 #include <mach/iommu.h>
 #include <mach/iommu_domains.h>
 #include <mach/msm_memtypes.h>
+/* HACK: preventing displaying garbage in off-mode charge */
+#ifdef CONFIG_MACH_LGE
+#include <mach/board_lge.h>
+#endif
 
 #include "mdss_fb.h"
 #include "mdss_mdp_splash_logo.h"
+
+#ifdef CONFIG_LGE_HANDLE_PANIC
+#include <mach/lge_handle_panic.h>
+#endif
 
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
 #define MDSS_FB_NUM 3
@@ -1050,6 +1058,7 @@ static int mdss_fb_blank(int blank_mode, struct fb_info *info)
 {
 	struct mdss_panel_data *pdata;
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
+	int ret;
 
 	mdss_fb_pan_idle(mfd);
 	if (mfd->op_enable == 0) {
@@ -1071,7 +1080,18 @@ static int mdss_fb_blank(int blank_mode, struct fb_info *info)
 		pdata->panel_info.is_lpm_mode = false;
 	}
 
-	return mdss_fb_blank_sub(blank_mode, info, mfd->op_enable);
+	ret = mdss_fb_blank_sub(blank_mode, info, mfd->op_enable);
+
+#ifdef CONFIG_MACH_LGE
+	if (lge_get_boot_mode() == LGE_BOOT_MODE_CHARGER) {
+		/* HACK: preventing displaying garbage in off-mode charge */
+		if (blank_mode == FB_BLANK_UNBLANK &&
+				mfd->panel_info->type == MIPI_CMD_PANEL) {
+			msleep(33);
+		}
+	}
+#endif
+	return ret;
 }
 
 /* Set VM page protection */
@@ -1433,6 +1453,13 @@ static int mdss_fb_alloc_fbmem_iommu(struct msm_fb_data_type *mfd, int dom)
 
 	pr_debug("alloc 0x%zxB @ (%pa phys) (0x%p virt) (%pa iova) for fb%d\n",
 		 size, &phys, virt, &mfd->iova, mfd->index);
+
+#ifdef CONFIG_LGE_HANDLE_PANIC
+	/* save fb1 address for lge crash handler display buffer */
+	lge_set_fb1_addr((unsigned int)(phys +
+				(mfd->fbi->fix.line_length *
+				 mfd->fbi->var.yres)));
+#endif
 
 	mfd->fbi->screen_base = virt;
 	mfd->fbi->fix.smem_start = phys;
