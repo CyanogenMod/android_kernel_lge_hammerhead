@@ -1191,6 +1191,7 @@ CONFIG_RFKILL_LEDS=y
 # CONFIG_CEPH_LIB is not set
 # CONFIG_NFC is not set
 # CONFIG_NFC_QNCI is not set
+CONFIG_NFC_BCM2079X=y
 
 #
 # Device Drivers
