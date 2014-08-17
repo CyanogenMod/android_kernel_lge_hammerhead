@@ -12,7 +12,7 @@
  */
 
 /include/ "msm8974-hammerhead.dtsi"
-/include/ "msm8974-hammerhead-dsi_jdi_cmd.dtsi"
+/include/ "msm8974-hammerhead-panel.dtsi"
 
 &soc {
 	i2c@f9924000 {
