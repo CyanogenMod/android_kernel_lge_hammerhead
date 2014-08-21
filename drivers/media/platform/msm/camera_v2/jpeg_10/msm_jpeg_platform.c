@@ -28,24 +28,6 @@
 #include "msm_jpeg_common.h"
 #include "msm_jpeg_hw.h"
 
-int msm_jpeg_platform_set_clk_rate(struct msm_jpeg_device *pgmn_dev,
-		long clk_rate)
-{
-	int rc = 0;
-	struct clk *jpeg_clk;
-
-	jpeg_clk = clk_get(&pgmn_dev->pdev->dev, "core_clk");
-	if (IS_ERR(jpeg_clk)) {
-		JPEG_PR_ERR("%s get failed\n", "core_clk");
-		rc = PTR_ERR(jpeg_clk);
-		return rc;
-	}
-
-	rc = clk_set_rate(jpeg_clk, clk_rate);
-
-	return rc;
-}
-
 void msm_jpeg_platform_p2v(struct msm_jpeg_device *pgmn_dev, struct file  *file,
 	struct ion_handle **ionhandle, int domain_num)
 {
@@ -153,8 +135,8 @@ static struct msm_bus_vectors msm_jpeg_vectors[] = {
 	{
 		.src = MSM_BUS_MASTER_JPEG,
 		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab  = JPEG_MAX_CLK_RATE * 2.5,
-		.ib  = JPEG_MAX_CLK_RATE * 2.5,
+		.ab  = JPEG_CLK_RATE * 2.5,
+		.ib  = JPEG_CLK_RATE * 2.5,
 	},
 };
 
@@ -347,12 +329,8 @@ int msm_jpeg_platform_release(struct resource *mem, void *base, int irq,
 		JPEG_DBG("%s:%d]", __func__, __LINE__);
 	}
 #endif
-	if (pgmn_dev->jpeg_bus_client) {
-		msm_bus_scale_client_update_request(
-			pgmn_dev->jpeg_bus_client, 0);
-		msm_bus_scale_unregister_client(pgmn_dev->jpeg_bus_client);
-	}
 
+	msm_bus_scale_unregister_client(pgmn_dev->jpeg_bus_client);
 	msm_cam_clk_enable(&pgmn_dev->pdev->dev, jpeg_8x_clk_info,
 	pgmn_dev->jpeg_clk, ARRAY_SIZE(jpeg_8x_clk_info), 0);
 	JPEG_DBG("%s:%d] clock disbale done", __func__, __LINE__);

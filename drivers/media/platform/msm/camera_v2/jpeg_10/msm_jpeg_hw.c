@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -216,15 +216,15 @@ void msm_jpeg_hw_we_buffer_update(struct msm_jpeg_hw_buf *p_input,
 	if (pingpong_index == 0) {
 		hw_cmd_p = &hw_cmd_we_ping_update[0];
 		hw_cmd_p->data = p_input->y_buffer_addr;
-		JPEG_DBG_HIGH("%s Output pln0 buffer address is %x\n", __func__,
+		JPEG_PR_ERR("%s Output pln0 buffer address is %x\n", __func__,
 			p_input->y_buffer_addr);
 		msm_jpeg_hw_write(hw_cmd_p++, base);
 		hw_cmd_p->data = p_input->cbcr_buffer_addr;
-		JPEG_DBG_HIGH("%s Output pln1 buffer address is %x\n", __func__,
+		JPEG_PR_ERR("%s Output pln1 buffer address is %x\n", __func__,
 			p_input->cbcr_buffer_addr);
 		msm_jpeg_hw_write(hw_cmd_p++, base);
 		hw_cmd_p->data = p_input->pln2_addr;
-		JPEG_DBG_HIGH("%s Output pln2 buffer address is %x\n", __func__,
+		JPEG_PR_ERR("%s Output pln2 buffer address is %x\n", __func__,
 			p_input->pln2_addr);
 		msm_jpeg_hw_write(hw_cmd_p++, base);
 	}
@@ -328,18 +328,13 @@ void msm_jpeg_hw_delay(struct msm_jpeg_hw_cmd *hw_cmd_p, int m_us)
 int msm_jpeg_hw_exec_cmds(struct msm_jpeg_hw_cmd *hw_cmd_p, uint32_t m_cmds,
 	uint32_t max_size, void *base)
 {
-	int is_copy_to_user = 0;
+	int is_copy_to_user = -1;
 	uint32_t data;
 
 	while (m_cmds--) {
 		if (hw_cmd_p->offset > max_size) {
 			JPEG_PR_ERR("%s:%d] %d exceed hw region %d\n", __func__,
 				__LINE__, hw_cmd_p->offset, max_size);
-			return -EFAULT;
-		}
-		if (hw_cmd_p->offset & 0x3) {
-			JPEG_PR_ERR("%s:%d] %d Invalid alignment\n", __func__,
-					__LINE__, hw_cmd_p->offset);
 			return -EFAULT;
 		}
 

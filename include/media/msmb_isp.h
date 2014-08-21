@@ -1,14 +1,3 @@
-/* Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
 #ifndef __MSMB_ISP__
 #define __MSMB_ISP__
 
@@ -19,11 +8,15 @@
 
 #define ISP_VERSION_40        40
 #define ISP_VERSION_32        32
-#define ISP_NATIVE_BUF_BIT    0x10000
-#define ISP0_BIT              0x20000
-#define ISP1_BIT              0x40000
-#define ISP_META_CHANNEL_BIT  0x80000
+#define ISP_NATIVE_BUF_BIT    (0x10000 << 0)
+#define ISP0_BIT              (0x10000 << 1)
+#define ISP1_BIT              (0x10000 << 2)
+#define ISP_META_CHANNEL_BIT  (0x10000 << 3)
+#define ISP_SCRATCH_BUF_BIT   (0x10000 << 4)
 #define ISP_STATS_STREAM_BIT  0x80000000
+
+#define ISP_REG_CFG_NUM_CFG_MAX (10)
+#define ISP_REG_CFG_CMD_LEN_MAX (3 * 1024)
 
 enum ISP_START_PIXEL_PATTERN {
 	ISP_BAYER_RGRGRG,
@@ -109,7 +102,6 @@ struct msm_vfe_pix_cfg {
 	struct msm_vfe_camif_cfg camif_cfg;
 	enum msm_vfe_inputmux input_mux;
 	enum ISP_START_PIXEL_PATTERN pixel_pattern;
-	uint32_t input_format;
 };
 
 struct msm_vfe_rdi_cfg {
@@ -140,7 +132,6 @@ struct msm_vfe_axi_plane_cfg {
 struct msm_vfe_axi_stream_request_cmd {
 	uint32_t session_id;
 	uint32_t stream_id;
-	uint32_t vt_enable;
 	uint32_t output_format;/*Planar/RAW/Misc*/
 	enum msm_vfe_axi_stream_src stream_src; /*CAMIF/IDEAL/RDIs*/
 	struct msm_vfe_axi_plane_cfg plane_cfg[MAX_PLANES_PER_STREAM];
@@ -154,7 +145,6 @@ struct msm_vfe_axi_stream_request_cmd {
 	uint8_t buf_divert; /* if TRUE no vb2 buf done. */
 	/*Return values*/
 	uint32_t axi_stream_handle;
-	uint32_t burst_len;
 };
 
 struct msm_vfe_axi_stream_release_cmd {
@@ -164,7 +154,6 @@ struct msm_vfe_axi_stream_release_cmd {
 enum msm_vfe_axi_stream_cmd {
 	STOP_STREAM,
 	START_STREAM,
-	STOP_IMMEDIATELY,
 };
 
 struct msm_vfe_axi_stream_cfg_cmd {
@@ -177,20 +166,14 @@ enum msm_vfe_axi_stream_update_type {
 	ENABLE_STREAM_BUF_DIVERT,
 	DISABLE_STREAM_BUF_DIVERT,
 	UPDATE_STREAM_FRAMEDROP_PATTERN,
-	UPDATE_STREAM_AXI_CONFIG,
-};
-
-struct msm_vfe_axi_stream_cfg_update_info {
-	uint32_t stream_handle;
-	uint32_t output_format;
-	enum msm_vfe_frame_skip_pattern skip_pattern;
-	struct msm_vfe_axi_plane_cfg plane_cfg[MAX_PLANES_PER_STREAM];
+	UPDATE_STREAM_REQUEST_FRAMES,
 };
 
 struct msm_vfe_axi_stream_update_cmd {
-	uint32_t num_streams;
+	uint32_t stream_handle;
 	enum msm_vfe_axi_stream_update_type update_type;
-	struct msm_vfe_axi_stream_cfg_update_info update_info[MAX_NUM_STREAM];
+	enum msm_vfe_frame_skip_pattern skip_pattern;
+	uint32_t request_frm_num;
 };
 
 enum msm_isp_stats_type {
@@ -226,7 +209,6 @@ struct msm_vfe_stats_stream_cfg_cmd {
 	uint8_t num_streams;
 	uint32_t stream_handle[MSM_ISP_STATS_MAX];
 	uint8_t enable;
-	uint32_t stats_burst_len;
 };
 
 enum msm_vfe_reg_cfg_type {
@@ -240,11 +222,6 @@ enum msm_vfe_reg_cfg_type {
 	VFE_READ_DMI_16BIT,
 	VFE_READ_DMI_32BIT,
 	VFE_READ_DMI_64BIT,
-	GET_SOC_HW_VER,
-	GET_MAX_CLK_RATE,
-	VFE_HW_UPDATE_LOCK,
-	VFE_HW_UPDATE_UNLOCK,
-	SET_WM_UB_SIZE,
 };
 
 struct msm_vfe_cfg_cmd2 {
@@ -318,7 +295,9 @@ enum msm_isp_event_idx {
 	ISP_WM_BUS_OVERFLOW = 4,
 	ISP_STATS_OVERFLOW  = 5,
 	ISP_CAMIF_ERROR     = 6,
-	ISP_BUF_DONE        = 9,
+	ISP_SOF             = 7,
+	ISP_EOF             = 8,
+	ISP_FRAME_DROP      = 9,
 	ISP_EVENT_MAX       = 10
 };
 
@@ -326,8 +305,6 @@ enum msm_isp_event_idx {
 #define ISP_EVENT_BASE            (V4L2_EVENT_PRIVATE_START)
 #define ISP_BUF_EVENT_BASE        (ISP_EVENT_BASE + (1 << ISP_EVENT_OFFSET))
 #define ISP_STATS_EVENT_BASE      (ISP_EVENT_BASE + (2 << ISP_EVENT_OFFSET))
-#define ISP_SOF_EVENT_BASE        (ISP_EVENT_BASE + (3 << ISP_EVENT_OFFSET))
-#define ISP_EOF_EVENT_BASE        (ISP_EVENT_BASE + (4 << ISP_EVENT_OFFSET))
 #define ISP_EVENT_REG_UPDATE      (ISP_EVENT_BASE + ISP_REG_UPDATE)
 #define ISP_EVENT_START_ACK       (ISP_EVENT_BASE + ISP_START_ACK)
 #define ISP_EVENT_STOP_ACK        (ISP_EVENT_BASE + ISP_STOP_ACK)
@@ -335,9 +312,9 @@ enum msm_isp_event_idx {
 #define ISP_EVENT_WM_BUS_OVERFLOW (ISP_EVENT_BASE + ISP_WM_BUS_OVERFLOW)
 #define ISP_EVENT_STATS_OVERFLOW  (ISP_EVENT_BASE + ISP_STATS_OVERFLOW)
 #define ISP_EVENT_CAMIF_ERROR     (ISP_EVENT_BASE + ISP_CAMIF_ERROR)
-#define ISP_EVENT_SOF             (ISP_SOF_EVENT_BASE)
-#define ISP_EVENT_EOF             (ISP_EOF_EVENT_BASE)
-#define ISP_EVENT_BUF_DONE        (ISP_EVENT_BASE + ISP_BUF_DONE)
+#define ISP_EVENT_SOF             (ISP_EVENT_BASE + ISP_SOF)
+#define ISP_EVENT_EOF             (ISP_EVENT_BASE + ISP_EOF)
+#define ISP_EVENT_FRAME_DROP      (ISP_EVENT_BASE + ISP_FRAME_DROP)
 #define ISP_EVENT_BUF_DIVERT      (ISP_BUF_EVENT_BASE)
 #define ISP_EVENT_STATS_NOTIFY    (ISP_STATS_EVENT_BASE)
 #define ISP_EVENT_COMP_STATS_NOTIFY (ISP_EVENT_STATS_NOTIFY + MSM_ISP_STATS_MAX)
@@ -349,7 +326,6 @@ struct msm_isp_buf_event {
 	uint32_t session_id;
 	uint32_t stream_id;
 	uint32_t handle;
-	uint32_t output_format;
 	int8_t buf_idx;
 };
 struct msm_isp_stats_event {
@@ -370,10 +346,17 @@ struct msm_isp_event_data {
 	struct timeval timestamp;
 	/* Monotonic timestamp since bootup */
 	struct timeval mono_timestamp;
-	enum msm_vfe_input_src input_intf;
+	/* if pix is a src frame_id is from camif */
 	uint32_t frame_id;
 	union {
+		/* START_ACK, STOP_ACK */
+		struct msm_isp_stream_ack stream_ack;
+		/* REG_UPDATE_TRIGGER, bus over flow */
+		enum msm_vfe_input_src input_src;
+		/* stats notify */
 		struct msm_isp_stats_event stats;
+		/* IRQ_VIOLATION, STATS_OVER_FLOW, WM_OVER_FLOW */
+		uint32_t irq_status_mask;
 		struct msm_isp_buf_event buf_done;
 	} u; /* union can have max 52 bytes */
 };
@@ -390,9 +373,6 @@ struct msm_isp_event_data {
 #define V4L2_PIX_FMT_QGBRG12 v4l2_fourcc('Q', 'G', 'B', '2')
 #define V4L2_PIX_FMT_QGRBG12 v4l2_fourcc('Q', 'G', 'R', '2')
 #define V4L2_PIX_FMT_QRGGB12 v4l2_fourcc('Q', 'R', 'G', '2')
-#define V4L2_PIX_FMT_NV14 v4l2_fourcc('N', 'V', '1', '4')
-#define V4L2_PIX_FMT_NV41 v4l2_fourcc('N', 'V', '4', '1')
-#define V4L2_PIX_FMT_META v4l2_fourcc('Q', 'M', 'E', 'T')
 
 #define VIDIOC_MSM_VFE_REG_CFG \
 	_IOWR('V', BASE_VIDIOC_PRIVATE, struct msm_vfe_cfg_cmd2)
@@ -434,5 +414,9 @@ struct msm_isp_event_data {
 
 #define VIDIOC_MSM_ISP_UPDATE_STREAM \
 	_IOWR('V', BASE_VIDIOC_PRIVATE+13, struct msm_vfe_axi_stream_update_cmd)
+
+#define VIDIOC_MSM_ISP_CONFIG_DONE \
+	_IOWR('V', BASE_VIDIOC_PRIVATE+14, int)
+
 
 #endif /* __MSMB_ISP__ */

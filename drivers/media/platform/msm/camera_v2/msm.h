@@ -14,10 +14,10 @@
 #define _MSM_H
 
 #include <linux/version.h>
-#include <linux/completion.h>
 #include <linux/i2c.h>
 #include <linux/videodev2.h>
 #include <linux/pm_qos.h>
+#include <linux/wakelock.h>
 #include <linux/msm_ion.h>
 #include <linux/iommu.h>
 #include <media/v4l2-dev.h>
@@ -36,7 +36,6 @@
 struct msm_video_device {
 	struct video_device *vdev;
 	atomic_t opened;
-	atomic_t stream_cnt;
 };
 
 struct msm_queue_head {
@@ -71,7 +70,7 @@ struct msm_command {
 struct msm_command_ack {
 	struct list_head list;
 	struct msm_queue_head command_q;
-	struct completion wait_complete;
+	wait_queue_head_t wait;
 	int stream_id;
 };
 

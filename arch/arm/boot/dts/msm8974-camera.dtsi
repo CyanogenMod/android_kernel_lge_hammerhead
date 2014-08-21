@@ -94,13 +94,12 @@
 
 	qcom,ispif@fda0A000 {
 		cell-index = <0>;
-		compatible = "qcom,ispif-v3.0", "qcom,ispif";
+		compatible = "qcom,ispif";
 		reg = <0xfda0A000 0x500>,
                       <0xfda00020 0x10>;
 		reg-names = "ispif", "csi_clk_mux";
 		interrupts = <0 55 0>;
 		interrupt-names = "ispif";
-		qcom,num-isps = <0x2>;
 	};
 
 	qcom,vfe@fda10000 {
@@ -167,7 +166,7 @@
 		compatible = "qcom,cpp";
 		reg = <0xfda04000 0x100>,
 			<0xfda40000 0x200>,
-			<0xfda18000 0x018>;
+			<0xfda18000 0x008>;
 		reg-names = "cpp", "cpp_vbif", "cpp_hw";
 		interrupts = <0 49 0>;
 		interrupt-names = "cpp";
@@ -200,7 +199,6 @@
 		qcom,hw-scl-stretch-en = <0>;
 		qcom,hw-trdhld = <6>;
 		qcom,hw-tsp = <3>;
-		status = "ok";
 	};
 
 	cci_master1: qcom,cci_master_1 {
@@ -214,7 +212,6 @@
 		qcom,hw-scl-stretch-en = <0>;
 		qcom,hw-trdhld = <6>;
 		qcom,hw-tsp = <3>;
-		status = "ok";
 	};
 
 	cci: qcom,cci@fda0C000 {
