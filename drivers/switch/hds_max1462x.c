@@ -132,6 +132,9 @@ struct max1462x_hsd_info {
 	struct delayed_work work_for_key_pressed;
 	struct delayed_work work_for_key_released;
 
+	/* adc device */
+	struct qpnp_vadc_chip *vadc_dev;
+
 	unsigned char *pdev_name;
 };
 
@@ -181,7 +184,7 @@ static void max1462x_button_pressed(struct work_struct *work)
 		return;
 	}
 
-	rc = qpnp_vadc_read(ADC_PORT_NUM, &result);
+	rc = qpnp_vadc_read(hi->vadc_dev, ADC_PORT_NUM, &result);
 	if (rc < 0) {
 		if (rc == -ETIMEDOUT)
 			pr_err("%s: adc read timeout\n",
@@ -488,6 +491,14 @@ static int max1462x_hsd_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, hi);
 
+	hi->vadc_dev = qpnp_get_vadc(&pdev->dev, "max1462x");
+	if (IS_ERR(hi->vadc_dev)) {
+		ret = PTR_ERR(hi->vadc_dev);
+		if (ret != -EPROBE_DEFER)
+			pr_err("vadc property missing,  ret=%d\n", ret);
+		goto err_kzalloc;
+	}
+
 	atomic_set(&hi->btn_state, 0);
 	atomic_set(&hi->is_3_pole_or_not, 1);
 
@@ -599,7 +610,7 @@ static int max1462x_hsd_probe(struct platform_device *pdev)
 
 	/* headset tx noise */
 	for (i = 0; i < adc_read_count; i++) {
-		ret = qpnp_vadc_read(ADC_PORT_NUM, &result);
+		ret = qpnp_vadc_read(hi->vadc_dev, ADC_PORT_NUM, &result);
 		if (ret < 0) {
 			if (ret == -ETIMEDOUT)
 				pr_warn("%s: warning: adc read timeout \n",

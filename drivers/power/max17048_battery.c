@@ -56,6 +56,12 @@
 
 struct max17048_chip {
 	struct i2c_client *client;
+#ifdef CONFIG_SENSORS_QPNP_ADC_VOLTAGE
+	struct qpnp_vadc_chip *vadc_dev;
+#endif
+#ifdef CONFIG_SENSORS_QPNP_ADC_CURRENT
+	struct qpnp_iadc_chip *iadc_dev;
+#endif
 	struct power_supply batt_psy;
 	struct power_supply *ac_psy;
 	struct max17048_platform_data *pdata;
@@ -577,17 +583,12 @@ static int max17048_get_prop_present(struct max17048_chip *chip)
 
 #define DEFAULT_TEMP    250
 #ifdef CONFIG_SENSORS_QPNP_ADC_VOLTAGE
-static int qpnp_get_battery_temp(int *temp)
+static int qpnp_get_battery_temp(struct max17048_chip *chip, int *temp)
 {
 	int ret = 0;
 	struct qpnp_vadc_result results;
 
-	if (qpnp_vadc_is_ready()) {
-		*temp = DEFAULT_TEMP;
-		return 0;
-	}
-
-	ret = qpnp_vadc_read(LR_MUX1_BATT_THERM, &results);
+	ret = qpnp_vadc_read(chip->vadc_dev, LR_MUX1_BATT_THERM, &results);
 	if (ret) {
 		pr_err("%s: Unable to read batt temp\n", __func__);
 		*temp = DEFAULT_TEMP;
@@ -605,7 +606,7 @@ static int max17048_get_prop_temp(struct max17048_chip *chip)
 #ifdef CONFIG_SENSORS_QPNP_ADC_VOLTAGE
 	int ret;
 
-	ret = qpnp_get_battery_temp(&chip->batt_temp);
+	ret = qpnp_get_battery_temp(chip, &chip->batt_temp);
 	if (ret)
 		pr_err("%s: failed to get batt temp.\n", __func__);
 #else
@@ -618,18 +619,13 @@ static int max17048_get_prop_temp(struct max17048_chip *chip)
 }
 
 #ifdef CONFIG_SENSORS_QPNP_ADC_CURRENT
-static int qpnp_get_battery_current(int *current_ua)
+static int qpnp_get_battery_current(struct max17048_chip *chip,
+			int *current_ua)
 {
 	struct qpnp_iadc_result i_result;
 	int ret;
 
-	if (qpnp_iadc_is_ready()) {
-		pr_err("%s: qpnp iadc is not ready!\n", __func__);
-		*current_ua = 0;
-		return 0;
-	}
-
-	ret = qpnp_iadc_read(EXTERNAL_RSENSE, &i_result);
+	ret = qpnp_iadc_read(chip->iadc_dev, EXTERNAL_RSENSE, &i_result);
 	if (ret) {
 		pr_err("%s: failed to read iadc\n", __func__);
 		*current_ua = 0;
@@ -647,7 +643,7 @@ static int max17048_get_prop_current(struct max17048_chip *chip)
 #ifdef CONFIG_SENSORS_QPNP_ADC_CURRENT
 	int ret;
 
-	ret = qpnp_get_battery_current(&chip->batt_current);
+	ret = qpnp_get_battery_current(chip, &chip->batt_current);
 	if (ret)
 		pr_err("%s: failed to get batt current.\n", __func__);
 #else
@@ -832,6 +828,32 @@ static int max17048_pm_notifier(struct notifier_block *notifier,
 	return NOTIFY_DONE;
 }
 
+static int max17048_get_adc(struct max17048_chip *chip,
+			struct i2c_client *client)
+{
+	int rc = 0;
+
+#ifdef CONFIG_SENSORS_QPNP_ADC_VOLTAGE
+	chip->vadc_dev = qpnp_get_vadc(&client->dev, "max17048");
+	if (IS_ERR(chip->vadc_dev)) {
+		rc = PTR_ERR(chip->vadc_dev);
+		if (rc != -EPROBE_DEFER)
+			pr_err("vadc property missing, rc=%d\n", rc);
+		return rc;
+	}
+#endif
+#ifdef CONFIG_SENSORS_QPNP_ADC_CURRENT
+	chip->iadc_dev = qpnp_get_iadc(&client->dev, "max17048");
+	if (IS_ERR(chip->iadc_dev)) {
+		rc = PTR_ERR(chip->iadc_dev);
+		if (rc != -EPROBE_DEFER)
+			pr_err("iadc property missing, rc=%d\n", rc);
+		return rc;
+	}
+#endif
+	return 0;
+}
+
 static int max17048_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
@@ -844,6 +866,13 @@ static int max17048_probe(struct i2c_client *client,
 	chip = kzalloc(sizeof(*chip), GFP_KERNEL);
 	if (!chip)
 		return -ENOMEM;
+
+#if defined(CONFIG_SENSORS_QPNP_ADC_CURRENT) || \
+		defined(CONFIG_SENSORS_QPNP_ADC_VOLTAGE)
+	ret = max17048_get_adc(chip, client);
+	if (ret < 0)
+		goto error;
+#endif
 
 	if (!i2c_check_functionality(client->adapter,
 				I2C_FUNC_SMBUS_WORD_DATA)) {

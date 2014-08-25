@@ -106,6 +106,8 @@ struct bq24192_chip {
 	struct power_supply  *wlc_psy;
 	struct power_supply  *batt_psy;
 	struct qpnp_adc_tm_btm_param  adc_param;
+	struct qpnp_adc_tm_chip *adc_tm_dev;
+	struct qpnp_vadc_chip *vadc_dev;
 	int  usb_online;
 	int  ac_online;
 	int  ext_pwr;
@@ -791,7 +793,8 @@ static void bq24192_vbat_work(struct work_struct *work)
 				step_current_ma, step_input_i_ma);
 		bq24192_set_input_i_limit(chip, step_input_i_ma);
 		bq24192_set_ibat_max(chip, step_current_ma);
-		qpnp_adc_tm_channel_measure(&chip->adc_param);
+		qpnp_adc_tm_channel_measure(chip->adc_tm_dev,
+				&chip->adc_param);
 	}
 	wake_unlock(&chip->chg_wake_lock);
 }
@@ -813,7 +816,8 @@ static int bq24192_step_down_detect_disable(struct bq24192_chip *chip)
 	chip->adc_param.threshold_notification = bq24192_vbat_notification;
 	chip->adc_param.channel = VBAT_SNS;
 
-	ret = qpnp_adc_tm_channel_measure(&chip->adc_param);
+	ret = qpnp_adc_tm_channel_measure(chip->adc_tm_dev,
+				&chip->adc_param);
 	if (ret)
 		pr_err("request ADC error %d\n", ret);
 
@@ -830,12 +834,6 @@ static int bq24192_step_down_detect_init(struct bq24192_chip *chip)
 {
 	int ret;
 
-	ret = qpnp_adc_tm_is_ready();
-	if (ret) {
-		pr_err("qpnp_adc is not ready");
-		return ret;
-	}
-
 	chip->adc_param.high_thr = chip->step_dwn_thr_mv * 1000;
 	chip->adc_param.low_thr = DISABLE_LOW_THR;
 	chip->adc_param.timer_interval = ADC_MEAS1_INTERVAL_2S;
@@ -844,7 +842,8 @@ static int bq24192_step_down_detect_init(struct bq24192_chip *chip)
 	chip->adc_param.threshold_notification = bq24192_vbat_notification;
 	chip->adc_param.channel = VBAT_SNS;
 
-	ret = qpnp_adc_tm_channel_measure(&chip->adc_param);
+	ret = qpnp_adc_tm_channel_measure(chip->adc_tm_dev,
+				&chip->adc_param);
 	if (ret)
 		pr_err("request ADC error %d\n", ret);
 
@@ -1173,7 +1172,7 @@ static int bq24192_get_prop_input_voltage(struct bq24192_chip *chip)
 	int rc = 0;
 	struct qpnp_vadc_result results;
 
-	rc = qpnp_vadc_read(USBIN, &results);
+	rc = qpnp_vadc_read(chip->vadc_dev, USBIN, &results);
 	if (rc) {
 		pr_err("Unable to read vbus rc=%d\n", rc);
 		return UNINIT_VBUS_UV;
@@ -1582,6 +1581,30 @@ out:
 	return ret;
 }
 
+static int bq24192_get_adc(struct bq24192_chip *chip,
+			struct i2c_client *client)
+{
+	int rc = 0;
+
+	chip->vadc_dev = qpnp_get_vadc(&client->dev, "bq24192");
+	if (IS_ERR(chip->vadc_dev)) {
+		rc = PTR_ERR(chip->vadc_dev);
+		if (rc != -EPROBE_DEFER)
+			pr_err("vadc property missing, rc=%d\n", rc);
+		return rc;
+	}
+
+	chip->adc_tm_dev = qpnp_get_adc_tm(&client->dev, "bq24192");
+	if (IS_ERR(chip->adc_tm_dev)) {
+		rc = PTR_ERR(chip->adc_tm_dev);
+		if (rc != -EPROBE_DEFER)
+			pr_err("adc-tm property missing, rc=%d\n", rc);
+		return rc;
+	}
+
+	return 0;
+}
+
 static int bq24192_probe(struct i2c_client *client,
 				  const struct i2c_device_id *id)
 {
@@ -1604,6 +1627,10 @@ static int bq24192_probe(struct i2c_client *client,
 	}
 
 	chip->client = client;
+
+	ret = bq24192_get_adc(chip, client);
+	if (ret < 0)
+		goto error;
 
 	chip->usb_psy = power_supply_get_by_name("usb");
 	if (!chip->usb_psy) {

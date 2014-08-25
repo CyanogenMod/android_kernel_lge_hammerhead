@@ -125,6 +125,7 @@
 		max1462x,gpio_detect = <&msmgpio 65 0x00>;
 		max1462x,gpio_mic_en = <&pm8941_gpios 29 0x00>;
 		max1462x,gpio_key = <&msmgpio 64 0x00>;
+		qcom,max1462x-vadc = <&pm8941_vadc>;
 	};
 
 	i2c@f9967000 {

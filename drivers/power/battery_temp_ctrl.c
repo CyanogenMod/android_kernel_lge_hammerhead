@@ -15,6 +15,7 @@
 #define pr_fmt(fmt)	"%s: " fmt, __func__
 
 #include <linux/kernel.h>
+#include <linux/err.h>
 #include <linux/device.h>
 #include <linux/platform_device.h>
 #include <linux/init.h>
@@ -28,6 +29,7 @@
 
 struct batt_tm_data {
 	struct device *dev;
+	struct qpnp_adc_tm_chip *adc_tm_dev;
 	struct power_supply tm_psy;
 	struct power_supply *batt_psy;
 	struct power_supply *ac_psy;
@@ -180,7 +182,8 @@ static void batt_tm_worker(struct work_struct *work)
 					batt_tm->adc_param.low_temp,
 					batt_tm->adc_param.high_temp);
 
-	rc = qpnp_adc_tm_channel_measure(&batt_tm->adc_param);
+	rc = qpnp_adc_tm_channel_measure(batt_tm->adc_tm_dev,
+						&batt_tm->adc_param);
 	if (rc)
 		pr_err("request ADC error\n");
 
@@ -203,12 +206,6 @@ static int batt_tm_notification_start(struct batt_tm_data *batt_tm)
 	int rc = 0;
 	union power_supply_propval ret = {0,};
 
-	rc = qpnp_adc_tm_is_ready();
-	if (rc) {
-		pr_err("qpnp_adc is not ready");
-		return rc;
-	}
-
 	if (batt_tm->ac_psy && batt_tm->chg_online) {
 		batt_tm->ac_psy->get_property(batt_tm->ac_psy,
 					POWER_SUPPLY_PROP_VOLTAGE_MAX, &ret);
@@ -230,7 +227,8 @@ static int batt_tm_notification_start(struct batt_tm_data *batt_tm)
 					batt_tm_ctrl_notification;
 	batt_tm->adc_param.channel = LR_MUX1_BATT_THERM;
 
-	rc = qpnp_adc_tm_channel_measure(&batt_tm->adc_param);
+	rc = qpnp_adc_tm_channel_measure(batt_tm->adc_tm_dev,
+						&batt_tm->adc_param);
 	if (rc)
 		pr_err("request ADC error %d\n", rc);
 
@@ -247,7 +245,8 @@ static int batt_tm_notification_end(struct batt_tm_data *batt_tm)
 				batt_tm_ctrl_notification;
 	batt_tm->adc_param.channel = LR_MUX1_BATT_THERM;
 
-	ret = qpnp_adc_tm_channel_measure(&batt_tm->adc_param);
+	ret = qpnp_adc_tm_channel_measure(batt_tm->adc_tm_dev,
+						&batt_tm->adc_param);
 	if (ret)
 		pr_err("request ADC error %d\n", ret);
 
@@ -336,6 +335,13 @@ static int batt_tm_parse_dt(struct device_node *np,
 	int ret;
 	int i;
 
+	batt_tm->adc_tm_dev = qpnp_get_adc_tm(batt_tm->dev, "batt_tm_ctrl");
+	if (IS_ERR(batt_tm->adc_tm_dev)) {
+		ret = PTR_ERR(batt_tm->adc_tm_dev);
+		pr_err("adc-tm not ready\n");
+		goto error;
+	}
+
 	ret = of_property_read_u32(np, "tm,low-vbatt-mv",
 				&batt_tm->low_batt_vreg_mv);
 	if (ret) {
@@ -381,7 +387,7 @@ static int batt_tm_parse_dt(struct device_node *np,
 		goto alloc_fail0;
 	}
 
-	for(i = 0; i < batt_tm->warm_cfg_size; i++) {
+	for (i = 0; i < batt_tm->warm_cfg_size; i++) {
 		batt_tm->warm_cfg[i].thr = KELVIN_TO_CELSIUS(buf[i*5]);
 		batt_tm->warm_cfg[i].action = buf[i*5+1];
 		batt_tm->warm_cfg[i].next_cool_thr =
@@ -424,7 +430,7 @@ static int batt_tm_parse_dt(struct device_node *np,
 		goto alloc_fail1;
 	}
 
-	for(i = 0; i < batt_tm->cold_cfg_size; i++) {
+	for (i = 0; i < batt_tm->cold_cfg_size; i++) {
 		batt_tm->cold_cfg[i].thr = KELVIN_TO_CELSIUS(buf[i*5]);
 		batt_tm->cold_cfg[i].action = buf[i*5+1];
 		batt_tm->cold_cfg[i].next_cool_thr =
@@ -480,6 +486,9 @@ static int batt_tm_ctrl_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
+	batt_tm->dev = &pdev->dev;
+	platform_set_drvdata(pdev, batt_tm);
+
 	if (dev_node) {
 		ret = batt_tm_parse_dt(dev_node, batt_tm);
 		if (ret) {
@@ -487,8 +496,6 @@ static int batt_tm_ctrl_probe(struct platform_device *pdev)
 			goto err_parse_dt;
 		}
 	}
-
-	batt_tm->dev = &pdev->dev;
 
 	wake_lock_init(&batt_tm->tm_wake_lock,
 			WAKE_LOCK_SUSPEND, "batt_tm_wake_lock");
@@ -514,7 +521,6 @@ static int batt_tm_ctrl_probe(struct platform_device *pdev)
 		goto err_tm_init;
 	}
 
-	platform_set_drvdata(pdev, batt_tm);
 	pr_info("probe success\n");
 
 	return 0;
