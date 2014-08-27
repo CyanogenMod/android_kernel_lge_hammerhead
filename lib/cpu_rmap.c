@@ -210,7 +210,7 @@ void free_irq_cpu_rmap(struct cpu_rmap *rmap)
 
 	for (index = 0; index < rmap->used; index++) {
 		glue = rmap->obj[index];
-		irq_set_affinity_notifier(glue->notify.irq, NULL);
+		irq_release_affinity_notifier(&glue->notify);
 	}
 	irq_run_affinity_notifiers();
 
