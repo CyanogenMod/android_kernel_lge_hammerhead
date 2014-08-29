@@ -3,8 +3,6 @@ Qualcomm MDSS EDP
 MDSS EDP is a edp driver which supports panels that are compatable with
 VESA EDP display interface specification.
 
-One should also configure the gpio that drives the pwm to the external backlight.
-
 Required properties
 - compatible :				Must be "qcom,mdss-edp".
 - reg :						Offset and length of the register set for the
@@ -23,12 +21,6 @@ Required properties
 - qcom,mdss-fb-map:			pHandle that specifies the framebuffer to which the
 					interface is mapped.
 - gpio-panel-hpd :			gpio pin use for edp hpd
-
-
-Optional properties:
-- qcom,cont-splash-enabled:             Boolean used to enable continuous splash mode.
-- qcom,mdss-brightness-max-level:	Specifies the max brightness level supported.
-					255 = default value.
 
 Example:
 	mdss_edp: qcom,mdss_edp@fd923400 {

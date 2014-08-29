@@ -63,7 +63,7 @@ static int dsi_panel_handler(struct mdss_panel_data *pdata, int enable)
 	if (enable) {
 		if (panel_common_data->reset)
 			panel_common_data->reset(pdata, 1);
-		pdata->panel_info.panel_power_on = 1;
+
 		if (panel_common_data->on)
 			rc = panel_common_data->on(pdata);
 
@@ -75,7 +75,7 @@ static int dsi_panel_handler(struct mdss_panel_data *pdata, int enable)
 
 		if (panel_common_data->off)
 			panel_common_data->off(pdata);
-		pdata->panel_info.panel_power_on = 0;
+
 		if (panel_common_data->reset)
 			panel_common_data->reset(pdata, 0);
 	}
