@@ -23,7 +23,6 @@
 #include "mdss_mdp.h"
 #include "mdss_mdp_rotator.h"
 #include "mdss_fb.h"
-#include "mdss_debug.h"
 
 #define MAX_ROTATOR_SESSIONS 8
 
@@ -282,9 +281,8 @@ static int mdss_mdp_rotator_queue_sub(struct mdss_mdp_rotator_session *rot,
 		pr_err("unable to queue rot data\n");
 		goto error;
 	}
-	ATRACE_BEGIN("rotator_kickoff");
+
 	ret = mdss_mdp_rotator_kickoff(rot_ctl, rot, dst_data);
-	ATRACE_END("rotator_kickoff");
 
 	return ret;
 error:
@@ -644,7 +642,7 @@ static int mdss_mdp_rotator_finish(struct mdss_mdp_rotator_session *rot)
 
 	if (rot_pipe) {
 		struct mdss_mdp_mixer *mixer = rot_pipe->mixer;
-		mdss_mdp_pipe_destroy(rot_pipe);
+		mdss_mdp_pipe_unmap(rot_pipe);
 		tmp = mdss_mdp_ctl_mixer_switch(mixer->ctl,
 				MDSS_MDP_WB_CTL_TYPE_BLOCK);
 		if (!tmp)
