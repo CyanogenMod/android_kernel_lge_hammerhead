@@ -1,6 +1,6 @@
 /* drivers/serial/msm_serial_hs_hwreg.h
  *
- * Copyright (c) 2007-2009, 2012-2014,The Linux Foundation. All rights reserved.
+ * Copyright (c) 2007-2009, 2012-2013,The Linux Foundation. All rights reserved.
  * 
  * All source code in this file is licensed under the following license
  * except where indicated.
@@ -60,30 +60,6 @@ enum msm_hsl_regs {
 	UARTDM_LAST,
 };
 
-enum msm_hs_regs {
-	UART_DM_MR1 = 0x0,
-	UART_DM_MR2 = 0x4,
-	UART_DM_IMR = 0xb0,
-	UART_DM_SR = 0xa4,
-	UART_DM_CR = 0xa8,
-	UART_DM_CSR = 0xa0,
-	UART_DM_IPR = 0x18,
-	UART_DM_ISR = 0xb4,
-	UART_DM_RX_TOTAL_SNAP = 0xbc,
-	UART_DM_TFWR = 0x1c,
-	UART_DM_RFWR = 0x20,
-	UART_DM_RF = 0x140,
-	UART_DM_TF = 0x100,
-	UART_DM_MISR = 0xac,
-	UART_DM_DMRX = 0x34,
-	UART_DM_NCF_TX = 0x40,
-	UART_DM_DMEN = 0x3c,
-	UART_DM_TXFS = 0x4c,
-	UART_DM_RXFS = 0x50,
-	UART_DM_RX_TRANS_CTRL = 0xcc,
-	UART_DM_BCR = 0xc8,
-};
-
 #define UARTDM_MR1_ADDR 0x0
 #define UARTDM_MR2_ADDR 0x4
 
@@ -94,11 +70,7 @@ enum msm_hs_regs {
  * UARTDM Core v1.4 STALE_IRQ_EMPTY bit defination
  * Stale interrupt will fire if bit is set when RX-FIFO is empty
  */
-#define UARTDM_BCR_TX_BREAK_DISABLE	0x1
 #define UARTDM_BCR_STALE_IRQ_EMPTY	0x2
-#define UARTDM_BCR_RX_DMRX_LOW_EN	0x4
-#define UARTDM_BCR_RX_STAL_IRQ_DMRX_EQL	0x10
-#define UARTDM_BCR_RX_DMRX_1BYTE_RES_EN	0x20
 
 /* TRANSFER_CONTROL Register for UARTDM Core v1.4 */
 #define UARTDM_RX_TRANS_CTRL_ADDR      0xcc
@@ -247,6 +219,70 @@ enum msm_hs_regs {
 #define UARTDM_TX_BAM_ENABLE_BMSK 0x4
 #define UARTDM_RX_BAM_ENABLE_BMSK 0x8
 
+/*
+ * Some of the BLSP Based UART Core(v14) existing register offsets
+ * are different compare to GSBI based UART Core(v13)
+ * Hence add the changed register offsets for UART Core v14
+ */
+#ifdef CONFIG_MSM_UARTDM_Core_v14
+
+/* write only register */
+#define UARTDM_CSR_ADDR    0xa0
+
+/* write only register */
+#define UARTDM_TF_ADDR   0x100
+#define UARTDM_TF2_ADDR  0x104
+#define UARTDM_TF3_ADDR  0x108
+#define UARTDM_TF4_ADDR  0x10c
+#define UARTDM_TF5_ADDR  0x110
+#define UARTDM_TF6_ADDR  0x114
+#define UARTDM_TF7_ADDR  0x118
+#define UARTDM_TF8_ADDR  0x11c
+#define UARTDM_TF9_ADDR  0x120
+#define UARTDM_TF10_ADDR 0x124
+#define UARTDM_TF11_ADDR 0x128
+#define UARTDM_TF12_ADDR 0x12c
+#define UARTDM_TF13_ADDR 0x130
+#define UARTDM_TF14_ADDR 0x134
+#define UARTDM_TF15_ADDR 0x138
+#define UARTDM_TF16_ADDR 0x13c
+
+/* write only register */
+#define UARTDM_CR_ADDR 0xa8
+/* write only register */
+#define UARTDM_IMR_ADDR 0xb0
+#define UARTDM_IRDA_ADDR 0xb8
+
+/* Read Only register */
+#define UARTDM_SR_ADDR 0xa4
+
+/* Read Only register */
+#define UARTDM_RF_ADDR   0x140
+#define UARTDM_RF2_ADDR  0x144
+#define UARTDM_RF3_ADDR  0x148
+#define UARTDM_RF4_ADDR  0x14c
+#define UARTDM_RF5_ADDR  0x150
+#define UARTDM_RF6_ADDR  0x154
+#define UARTDM_RF7_ADDR  0x158
+#define UARTDM_RF8_ADDR  0x15c
+#define UARTDM_RF9_ADDR  0x160
+#define UARTDM_RF10_ADDR 0x164
+#define UARTDM_RF11_ADDR 0x168
+#define UARTDM_RF12_ADDR 0x16c
+#define UARTDM_RF13_ADDR 0x170
+#define UARTDM_RF14_ADDR 0x174
+#define UARTDM_RF15_ADDR 0x178
+#define UARTDM_RF16_ADDR 0x17c
+
+/* Read Only register */
+#define UARTDM_MISR_ADDR 0xac
+
+/* Read Only register */
+#define UARTDM_ISR_ADDR 0xb4
+#define UARTDM_RX_TOTAL_SNAP_ADDR 0xbc
+
+#else
+
 /* Register offsets for UART Core v13 */
 
 /* write only register */
@@ -279,5 +315,7 @@ enum msm_hs_regs {
 /* Read Only register */
 #define UARTDM_ISR_ADDR 0x14
 #define UARTDM_RX_TOTAL_SNAP_ADDR 0x38
+
+#endif
 
 #endif /* MSM_SERIAL_HS_HWREG_H */
