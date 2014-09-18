@@ -785,6 +785,7 @@ static void req_crypt_dtr(struct dm_target *ti)
 		crypto_free_ablkcipher(tfm);
 		tfm = NULL;
 	}
+	dm_put_device(ti, dev);
 }
 
 
