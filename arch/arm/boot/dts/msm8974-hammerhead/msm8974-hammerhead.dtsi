@@ -86,7 +86,6 @@
 	sound {
 		compatible = "qcom,msm8974-audio-taiko";
 		qcom,model = "msm8974-taiko-mtp-snd-card";
-		qcom,mbhc-audio-jack-type = "6-pole-jack";
 
 		qcom,mbhc-disabled = <1>;
 
