@@ -1698,6 +1698,9 @@ static int bq24192_probe(struct i2c_client *client,
 					chip->otg_en_gpio, ret);
 			goto err_otg_en_gpio;
 		}
+		gpio_set_value(chip->otg_en_gpio, 1);
+		usleep(10 * 1000);
+		gpio_set_value(chip->otg_en_gpio, 0);
 	}
 
 	i2c_set_clientdata(client, chip);
