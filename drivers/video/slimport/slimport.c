@@ -241,6 +241,11 @@ int sp_read_reg(uint8_t slave_addr, uint8_t offset, uint8_t *buf)
 	if (!the_chip)
 		return -EINVAL;
 
+	if (sp_tx_pd_mode) {
+		pr_debug("tried to access the sp reg after power down\n");
+		return -EIO;
+	}
+
 	the_chip->client->addr = (slave_addr >> 1);
 	ret = i2c_smbus_read_byte_data(the_chip->client, offset);
 	if (ret < 0) {
@@ -258,6 +263,11 @@ int sp_write_reg(uint8_t slave_addr, uint8_t offset, uint8_t value)
 
 	if (!the_chip)
 		return -EINVAL;
+
+	if (sp_tx_pd_mode) {
+		pr_debug("tried to access the sp reg after power down\n");
+		return -EIO;
+	}
 
 	the_chip->client->addr = (slave_addr >> 1);
 	ret = i2c_smbus_write_byte_data(the_chip->client, offset, value);
@@ -280,6 +290,8 @@ void sp_tx_hardware_poweron(void)
 	msleep(5);
 	gpio_set_value(the_chip->gpio_reset, 1);
 
+	sp_tx_pd_mode = 0;
+
 	pr_info("anx7808 power on\n");
 }
 
@@ -289,6 +301,8 @@ void sp_tx_hardware_powerdown(void)
 
 	if (!the_chip)
 		return;
+
+	sp_tx_pd_mode = 1;
 
 	gpio_set_value(the_chip->gpio_reset, 0);
 	msleep(1);
@@ -302,25 +316,9 @@ void sp_tx_hardware_powerdown(void)
 		status = the_chip->hdmi_sp_ops->set_upstream_hpd(
 				the_chip->hdmi_pdev, 0);
 		if (status)
-			pr_err("failed to turn off hpd");
+			pr_err("failed to turn off hpd\n");
 	}
 	pr_info("anx7808 power down\n");
-}
-
-
-static void sp_tx_power_down_and_init(void)
-{
-	sp_tx_vbus_powerdown();
-	sp_tx_power_down(SP_TX_PWR_REG);
-	sp_tx_power_down(SP_TX_PWR_TOTAL);
-	sp_tx_hardware_powerdown();
-	sp_tx_pd_mode = 1;
-	sp_tx_link_config_done = 0;
-	sp_tx_hw_lt_enable = 0;
-	sp_tx_hw_lt_done = 0;
-	sp_tx_rx_type = RX_NULL;
-	sp_tx_rx_type_backup = RX_NULL;
-	sp_tx_set_sys_state(STATE_CABLE_PLUG);
 }
 
 static void slimport_cable_plug_proc(struct anx7808_data *anx7808)
@@ -337,9 +335,8 @@ static void slimport_cable_plug_proc(struct anx7808_data *anx7808)
 					status = anx7808->hdmi_sp_ops->set_upstream_hpd(
 							anx7808->hdmi_pdev, 1);
 					if (status)
-						pr_err("failed to turn on hpd");
+						pr_err("failed to turn on hpd\n");
 				}
-				sp_tx_pd_mode = 0;
 				sp_tx_hardware_poweron();
 				sp_tx_power_on(SP_TX_PWR_REG);
 				sp_tx_power_on(SP_TX_PWR_TOTAL);
@@ -661,6 +658,7 @@ static void anx7808_work_func(struct work_struct *work)
 static int anx7808_enable_irq(const char *val, const struct kernel_param *kp)
 {
 	int ret;
+	int old_val = irq_enabled;
 
 	if (!the_chip)
 		return -ENODEV;
@@ -672,6 +670,11 @@ static int anx7808_enable_irq(const char *val, const struct kernel_param *kp)
 	}
 
 	if (irq_enabled) {
+		if (old_val) {
+			disable_irq(the_chip->client->irq);
+			sp_tx_power_down_and_init();
+			anx7808_unvote_usb_clk(the_chip);
+		}
 		anx7808_cbl_det_isr(the_chip->client->irq, the_chip);
 		enable_irq(the_chip->client->irq);
 	}
