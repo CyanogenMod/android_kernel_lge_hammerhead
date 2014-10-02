@@ -157,7 +157,7 @@ static void hsuart_power(int on)
 	if (test_bit(BT_SUSPEND, &flags))
 		return;
 
-	pr_info("HSUART CLOCK:  %s\n", on ? "ON" : "OFF");
+	pr_debug("HSUART CLOCK:  %s\n", on ? "ON" : "OFF");
 	if (on) {
 		msm_hs_request_clock_on(bsi->uport);
 		msm_hs_set_mctrl(bsi->uport, TIOCM_RTS);
