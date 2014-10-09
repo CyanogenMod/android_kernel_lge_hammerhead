@@ -47,7 +47,6 @@ enum {
 	SMD_MODEM = SMEM_MODEM,
 	SMD_Q6 = SMEM_Q6,
 	SMD_DSPS = SMEM_DSPS,
-	SMD_TZ = SMEM_DSPS,
 	SMD_WCNSS = SMEM_WCNSS,
 	SMD_MODEM_Q6_FW = SMEM_MODEM_Q6_FW,
 	SMD_RPM = SMEM_RPM,
@@ -74,7 +73,6 @@ enum {
 	SMD_MODEM_RPM,
 	SMD_QDSP_RPM,
 	SMD_WCNSS_RPM,
-	SMD_TZ_RPM,
 	SMD_NUM_TYPE,
 	SMD_LOOPBACK_TYPE = 100,
 
@@ -137,10 +135,25 @@ struct smd_subsystem_restart_config {
 	int disable_smsm_reset_handshake;
 };
 
+/*
+ * Shared Memory Regions
+ *
+ * the array of these regions is expected to be in ascending order by phys_addr
+ *
+ * @phys_addr: physical base address of the region
+ * @size: size of the region in bytes
+ */
+struct smd_smem_regions {
+	phys_addr_t phys_addr;
+	resource_size_t size;
+};
+
 struct smd_platform {
 	uint32_t num_ss_configs;
 	struct smd_subsystem_config *smd_ss_configs;
 	struct smd_subsystem_restart_config *smd_ssr_config;
+	uint32_t num_smem_areas;
+	struct smd_smem_regions *smd_smem_areas;
 };
 
 #ifdef CONFIG_MSM_SMD
@@ -312,21 +325,30 @@ const char *smd_pid_to_subsystem(uint32_t pid);
  */
 int smd_is_pkt_avail(smd_channel_t *ch);
 
+/**
+ * smd_module_init_notifier_register() - Register a smd module
+ *					 init notifier block
+ * @nb: Notifier block to be registered
+ *
+ * In order to mark the dependency on SMD Driver module initialization
+ * register a notifier using this API. Once the smd module_init is
+ * done, notification will be passed to the registered module.
+ */
+int smd_module_init_notifier_register(struct notifier_block *nb);
+
+/**
+ * smd_module_init_notifier_register() - Unregister a smd module
+ *					 init notifier block
+ * @nb: Notifier block to be registered
+ */
+int smd_module_init_notifier_unregister(struct notifier_block *nb);
+
 /*
  * SMD initialization function that registers for a SMD platform driver.
  *
  * returns success on successful driver registration.
  */
 int __init msm_smd_init(void);
-
-/**
- * smd_remote_ss_to_edge() - return edge type from remote ss type
- * @name:	remote subsystem name
- *
- * Returns the edge type connected between the local subsystem(APPS)
- * and remote subsystem @name.
- */
-int smd_remote_ss_to_edge(const char *name);
 
 #else
 
@@ -456,14 +478,19 @@ static inline int smd_is_pkt_avail(smd_channel_t *ch)
 	return -ENODEV;
 }
 
+static inline int smd_module_init_notifier_register(struct notifier_block *nb)
+{
+	return -ENODEV;
+}
+
+static inline int smd_module_init_notifier_unregister(struct notifier_block *nb)
+{
+	return -ENODEV;
+}
+
 static inline int __init msm_smd_init(void)
 {
 	return 0;
-}
-
-static inline int smd_remote_ss_to_edge(const char *name)
-{
-	return -EINVAL;
 }
 #endif
 
