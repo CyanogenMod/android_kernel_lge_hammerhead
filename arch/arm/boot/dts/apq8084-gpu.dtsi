@@ -29,6 +29,9 @@
 		qcom,strtstp-sleepwake;
 		qcom,clk-map = <0x00000016>; //KGSL_CLK_CORE | KGSL_CLK_IFACE | KGSL_CLK_MEM_IFACE
 
+		qcom,pm-qos-active-latency = <501>;
+		qcom,pm-qos-wakeup-latency = <490>;
+
 		/* Bus Scale Settings */
 		qcom,msm-bus,name = "grp3d";
 		qcom,msm-bus,num-cases = <5>;
