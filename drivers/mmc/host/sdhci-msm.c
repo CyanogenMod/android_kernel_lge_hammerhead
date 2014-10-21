@@ -298,6 +298,7 @@ struct sdhci_msm_pltfm_data {
 	unsigned char sup_clk_cnt;
 	int mpm_sdiowakeup_int;
 	int sdiowakeup_irq;
+	enum pm_qos_req_type cpu_affinity_type;
 };
 
 struct sdhci_msm_bus_vote {
@@ -1355,6 +1356,30 @@ out:
 	return ret;
 }
 
+#ifdef CONFIG_SMP
+static void sdhci_msm_populate_affinity_type(struct sdhci_msm_pltfm_data *pdata,
+					     struct device_node *np)
+{
+	const char *cpu_affinity = NULL;
+
+	pdata->cpu_affinity_type = PM_QOS_REQ_AFFINE_IRQ;
+	if (!of_property_read_string(np, "qcom,cpu-affinity",
+				    &cpu_affinity)) {
+		if (!strcmp(cpu_affinity, "all_cores"))
+			pdata->cpu_affinity_type = PM_QOS_REQ_ALL_CORES;
+		else if (!strcmp(cpu_affinity, "affine_cores"))
+			pdata->cpu_affinity_type = PM_QOS_REQ_AFFINE_CORES;
+		else if (!strcmp(cpu_affinity, "affine_irq"))
+			pdata->cpu_affinity_type = PM_QOS_REQ_AFFINE_IRQ;
+	}
+}
+#else
+static void sdhci_msm_populate_affinity_type(struct sdhci_msm_pltfm_data *pdata,
+					     struct device_node *np)
+{
+}
+#endif
+
 /* Parse platform data */
 static struct sdhci_msm_pltfm_data *sdhci_msm_populate_pdata(struct device *dev,
 				struct sdhci_host *host)
@@ -1467,6 +1492,8 @@ static struct sdhci_msm_pltfm_data *sdhci_msm_populate_pdata(struct device *dev,
 
 	if (of_property_read_bool(np, "qcom,wakeup-on-idle"))
 		host->mmc->wakeup_on_idle = true;
+
+	sdhci_msm_populate_affinity_type(pdata, np);
 
 	return pdata;
 out:
@@ -3018,6 +3045,7 @@ static int __devinit sdhci_msm_probe(struct platform_device *pdev)
 		msm_host->mmc->caps |= MMC_CAP_NONREMOVABLE;
 
 	host->cpu_dma_latency_us = msm_host->pdata->cpu_dma_latency_us;
+	host->pm_qos_req_dma.type = msm_host->pdata->cpu_affinity_type;
 
 	init_completion(&msm_host->pwr_irq_completion);
 
