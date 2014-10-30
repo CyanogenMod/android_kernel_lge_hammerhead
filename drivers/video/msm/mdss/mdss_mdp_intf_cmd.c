@@ -625,9 +625,10 @@ static int mdss_mdp_cmd_set_partial_roi(struct mdss_mdp_ctl *ctl)
 	return rc;
 }
 
-static int mdss_mdp_cmd_panel_on(struct mdss_mdp_ctl *ctl)
+static int mdss_mdp_cmd_panel_on(struct mdss_mdp_ctl *ctl,
+	struct mdss_mdp_ctl *sctl)
 {
-	struct mdss_mdp_cmd_ctx *ctx;
+	struct mdss_mdp_cmd_ctx *ctx, *sctx = NULL;
 	int rc = 0;
 
 	ctx = (struct mdss_mdp_cmd_ctx *) ctl->priv_data;
@@ -635,6 +636,9 @@ static int mdss_mdp_cmd_panel_on(struct mdss_mdp_ctl *ctl)
 		pr_err("invalid ctx\n");
 		return -ENODEV;
 	}
+
+	if (sctl)
+		sctx = (struct mdss_mdp_cmd_ctx *) sctl->priv_data;
 
 	if (!__mdss_mdp_cmd_is_panel_power_on_interactive(ctx)) {
 		rc = mdss_mdp_ctl_intf_event(ctl, MDSS_EVENT_UNBLANK, NULL);
@@ -644,10 +648,14 @@ static int mdss_mdp_cmd_panel_on(struct mdss_mdp_ctl *ctl)
 		WARN(rc, "intf %d panel on error (%d)\n", ctl->intf_num, rc);
 
 		ctx->panel_power_state = MDSS_PANEL_POWER_ON;
+		if (sctx)
+			sctx->panel_power_state = MDSS_PANEL_POWER_ON;
 
 		mdss_mdp_ctl_intf_event(ctl,
 				MDSS_EVENT_REGISTER_RECOVERY_HANDLER,
 				(void *)&ctx->recovery);
+
+		atomic_set(&ctx->intf_stopped, 0);
 	} else {
 		pr_err("%s: Panel already on\n", __func__);
 	}
@@ -680,7 +688,7 @@ int mdss_mdp_cmd_kickoff(struct mdss_mdp_ctl *ctl, void *arg)
 	 * start. This is to ensure that no artifacts are seen on the panel.
 	 */
 	if (__mdss_mdp_cmd_is_panel_power_off(ctx))
-		mdss_mdp_cmd_panel_on(ctl);
+		mdss_mdp_cmd_panel_on(ctl, NULL);
 
 	MDSS_XLOG(ctl->num, ctl->roi.x, ctl->roi.y, ctl->roi.w,
 						ctl->roi.h);
@@ -732,9 +740,11 @@ int mdss_mdp_cmd_stop(struct mdss_mdp_ctl *ctl, int panel_power_state)
 	unsigned long flags;
 	struct mdss_mdp_vsync_handler *tmp, *handle;
 	int need_wait = 0;
+	bool panel_off = false;
+	bool turn_off_clocks = false;
+	bool send_panel_events = false;
 	int ret = 0;
 	int hz;
-	int turn_off_panel = 0;
 
 	ctx = (struct mdss_mdp_cmd_ctx *) ctl->priv_data;
 	if (!ctx) {
@@ -748,6 +758,58 @@ int mdss_mdp_cmd_stop(struct mdss_mdp_ctl *ctl, int panel_power_state)
 	 */
 	if (mdss_panel_is_power_on(panel_power_state))
 		return 0;
+
+	if (__mdss_mdp_cmd_is_panel_power_off(ctx)) {
+		pr_debug("%s: panel already off\n", __func__);
+			return 0;
+	}
+
+	if (ctx->panel_power_state == panel_power_state) {
+		pr_debug("%s: no transition needed %d --> %d\n", __func__,
+			ctx->panel_power_state, panel_power_state);
+		return 0;
+	}
+
+	if (__mdss_mdp_cmd_is_panel_power_on_interactive(ctx)) {
+		if (mdss_panel_is_power_on_lp(panel_power_state)) {
+			/*
+			 * If we are transitioning from interactive to low
+			 * power, then we need to send events to the interface
+			 * so that the panel can be configured in low power
+			 * mode.
+			 */
+			send_panel_events = true;
+			if (mdss_panel_is_power_on_ulp(panel_power_state))
+				turn_off_clocks = true;
+		} else if (mdss_panel_is_power_off(panel_power_state)) {
+		    send_panel_events = true;
+		    turn_off_clocks = true;
+		    panel_off = true;
+		}
+	} else {
+		if (mdss_panel_is_power_on_ulp(panel_power_state)) {
+			/*
+			 * If we are transitioning from low power to ultra low
+			 * power mode, no more display updates are expected.
+			 * Turn off the interface clocks.
+			 */
+			pr_debug("%s: turn off clocks\n", __func__);
+    			turn_off_clocks = true;
+		} else {
+                        /*
+	                 * Transition from ultra low power to low power does
+	                 * not require any special handling. The clocks would
+	                 * get turned on when the first update comes.
+                         */
+			pr_debug("%s: nothing to be done.\n", __func__);
+			return 0;
+		}
+	}
+
+	if (!turn_off_clocks)
+	    goto panel_events;
+
+	pr_debug("%s: turn off interface clocks\n", __func__);
 
 	list_for_each_entry_safe(handle, tmp, &ctx->vsync_handlers, list)
 		mdss_mdp_cmd_remove_vsync_handler(ctl, handle);
@@ -790,30 +852,39 @@ int mdss_mdp_cmd_stop(struct mdss_mdp_ctl *ctl, int panel_power_state)
 			MDSS_EVENT_REGISTER_RECOVERY_HANDLER,
 			NULL);
 
-	turn_off_panel = ctx->panel_power_state;
 	mdss_mdp_cmd_clk_off(ctx);
 	flush_work(&ctx->pp_done_work);
 	mdss_mdp_cmd_tearcheck_setup(ctl, false);
 
-	mdss_mdp_set_intr_callback(MDSS_MDP_IRQ_PING_PONG_RD_PTR, ctx->pp_num,
-				   NULL, NULL);
-	mdss_mdp_set_intr_callback(MDSS_MDP_IRQ_PING_PONG_COMP, ctx->pp_num,
-				   NULL, NULL);
+	if (mdss_panel_is_power_on(panel_power_state)) {
+	    pr_debug("%s: intf stopped with panel on\n", __func__);
+	} else {
+        	mdss_mdp_set_intr_callback(MDSS_MDP_IRQ_PING_PONG_RD_PTR, ctx->pp_num,
+	    	                        	NULL, NULL);
+		mdss_mdp_set_intr_callback(MDSS_MDP_IRQ_PING_PONG_COMP, ctx->pp_num,
+				        	NULL, NULL);
+	}
 
-	if (ctl->num == 0 && (turn_off_panel != MDSS_PANEL_POWER_OFF)) {
+panel_events:
+	if ((ctl->num == 0) && send_panel_events) {
+		pr_debug("%s: send panel events\n", __func__);
+
 		ret = mdss_mdp_ctl_intf_event(ctl, MDSS_EVENT_BLANK,
-				(void *) (long int) panel_power_state);
+                                      (void *) (long int) panel_power_state);
 		WARN(ret, "intf %d unblank error (%d)\n", ctl->intf_num, ret);
 
 		ret = mdss_mdp_ctl_intf_event(ctl, MDSS_EVENT_PANEL_OFF,
-				(void *) (long int) panel_power_state);
+                                      (void *) (long int) panel_power_state);
 		WARN(ret, "intf %d unblank error (%d)\n", ctl->intf_num, ret);
 	}
 
 	ctx->panel_power_state = panel_power_state;
 
-	mdss_mdp_cmd_tearcheck_setup(ctl, false);	
-
+	if (!panel_off) {
+	    pr_debug("%s: cmd_stop with panel always on\n", __func__);
+	    goto end;
+	}
+	pr_debug("%s: turn off panel\n", __func__);
 	memset(ctx, 0, sizeof(*ctx));
 	ctl->priv_data = NULL;
 
@@ -823,17 +894,18 @@ int mdss_mdp_cmd_stop(struct mdss_mdp_ctl *ctl, int panel_power_state)
 	ctl->add_vsync_handler = NULL;
 	ctl->remove_vsync_handler = NULL;
 
+end:
 	MDSS_XLOG(ctl->num, ctx->koff_cnt, ctx->clk_enabled,
 				ctx->rdptr_enabled, XLOG_FUNC_EXIT);
 	pr_debug("%s:-\n", __func__);
 
-
-	return 0;
+	return ret;
 }
 
 int mdss_mdp_cmd_start(struct mdss_mdp_ctl *ctl)
 {
 	struct mdss_mdp_cmd_ctx *ctx;
+	struct mdss_mdp_ctl *sctl = NULL;
 	struct mdss_mdp_mixer *mixer;
 	int i, ret;
 
@@ -850,6 +922,17 @@ int mdss_mdp_cmd_start(struct mdss_mdp_ctl *ctl)
 		if (ctx->ref_cnt == 0) {
 			ctx->ref_cnt++;
 			break;
+		} else {
+			if (mdss_panel_is_power_on(ctx->panel_power_state)) {
+				pr_debug("%s: ctl_start with panel always on\n",
+					 __func__);
+				mdss_mdp_cmd_restore(ctl);
+				/* Turn on panel so that it can exit low power mode */
+				return mdss_mdp_cmd_panel_on(ctl, sctl);
+			} else {
+				pr_err("Intf %d already in use\n", i);
+				return -EBUSY;
+		        }
 		}
 	}
 	if (i == MAX_SESSIONS) {
