@@ -139,6 +139,8 @@ enum sdc_mpm_pin_state {
 #define CORE_MCI_VERSION	0x050
 #define CORE_VERSION_310	0x10000011
 
+#define MSM_MMC_DEFAULT_CPU_DMA_LATENCY 200 /* usecs */
+
 /*
  * Waiting until end of potential AHB access for data:
  * 16 AHB cycles (160ns for 100MHz and 320ns for 50MHz) +
@@ -290,7 +292,8 @@ struct sdhci_msm_pltfm_data {
 	struct sdhci_msm_slot_reg_data *vreg_data;
 	bool nonremovable;
 	struct sdhci_msm_pin_data *pin_data;
-	u32 cpu_dma_latency_us;
+	u32 *cpu_dma_latency_us;
+	unsigned int cpu_dma_latency_tbl_sz;
 	int status_gpio; /* card detection GPIO that is configured as IRQ */
 	struct sdhci_msm_bus_voting_data *voting_data;
 	u32 *sup_clk_table;
@@ -1361,11 +1364,12 @@ static struct sdhci_msm_pltfm_data *sdhci_msm_populate_pdata(struct device *dev,
 	struct sdhci_msm_pltfm_data *pdata = NULL;
 	struct device_node *np = dev->of_node;
 	u32 bus_width = 0;
-	u32 cpu_dma_latency;
+	u32 prop_val = 0;
 	int len, i, mpm_int;
 	int clk_table_len;
 	u32 *clk_table = NULL;
 	enum of_gpio_flags flags = OF_GPIO_ACTIVE_LOW;
+	bool skip_qos_from_dt = false;
 
 	pdata = devm_kzalloc(dev, sizeof(*pdata), GFP_KERNEL);
 	if (!pdata) {
@@ -1387,9 +1391,51 @@ static struct sdhci_msm_pltfm_data *sdhci_msm_populate_pdata(struct device *dev,
 		pdata->mmc_bus_width = 0;
 	}
 
-	if (!of_property_read_u32(np, "qcom,cpu-dma-latency-us",
-				&cpu_dma_latency))
-		pdata->cpu_dma_latency_us = cpu_dma_latency;
+	if (of_get_property(np, "qcom,cpu-dma-latency-us",
+				&prop_val)) {
+
+		pdata->cpu_dma_latency_tbl_sz =
+			prop_val/sizeof(*pdata->cpu_dma_latency_us);
+
+		if (!(pdata->cpu_dma_latency_tbl_sz == 1 ||
+			pdata->cpu_dma_latency_tbl_sz == 3)) {
+			dev_warn(dev, "incorrect Qos param passed from DT: %d\n",
+				pdata->cpu_dma_latency_tbl_sz);
+			skip_qos_from_dt = true;
+		} else {
+			pdata->cpu_dma_latency_us = devm_kzalloc(dev,
+				sizeof(*pdata->cpu_dma_latency_us) *
+				pdata->cpu_dma_latency_tbl_sz,
+				GFP_KERNEL);
+			if (!pdata->cpu_dma_latency_us) {
+				dev_err(dev, "No memory for cpu_dma_latency_us\n");
+				goto out;
+			}
+			if (of_property_read_u32_array(np,
+					"qcom,cpu-dma-latency-us",
+					pdata->cpu_dma_latency_us,
+					pdata->cpu_dma_latency_tbl_sz)) {
+				dev_err(dev, "failed to parse cpu-dma-latency\n");
+				goto out;
+			}
+		}
+	} else {
+		dev_info(dev, "no qcom,cpu-dma-latency-us found\n");
+		skip_qos_from_dt = true;
+	}
+
+	if (skip_qos_from_dt) {
+		pdata->cpu_dma_latency_tbl_sz = 1;
+		pdata->cpu_dma_latency_us = devm_kzalloc(dev,
+			sizeof(*pdata->cpu_dma_latency_us) *
+			pdata->cpu_dma_latency_tbl_sz,
+			GFP_KERNEL);
+		if (!pdata->cpu_dma_latency_us) {
+			dev_err(dev, "No memory for cpu_dma_latency_us\n");
+			goto out;
+		}
+		pdata->cpu_dma_latency_us[0] = MSM_MMC_DEFAULT_CPU_DMA_LATENCY;
+	}
 
 	if (sdhci_msm_dt_get_array(dev, "qcom,clk-rates",
 			&clk_table, &clk_table_len, 0)) {
@@ -3016,6 +3062,7 @@ static int __devinit sdhci_msm_probe(struct platform_device *pdev)
 		msm_host->mmc->caps |= MMC_CAP_NONREMOVABLE;
 
 	host->cpu_dma_latency_us = msm_host->pdata->cpu_dma_latency_us;
+	host->cpu_dma_latency_tbl_sz = msm_host->pdata->cpu_dma_latency_tbl_sz;
 
 	init_completion(&msm_host->pwr_irq_completion);
 
