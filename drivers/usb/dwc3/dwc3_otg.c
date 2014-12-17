@@ -534,7 +534,6 @@ static void dwc3_otg_notify_host_mode(struct usb_otg *otg, int host_mode)
 static int dwc3_otg_set_power(struct usb_phy *phy, unsigned mA)
 {
 	static int power_supply_type;
-	bool dcp;
 	struct dwc3_otg *dotg = container_of(phy->otg, struct dwc3_otg, otg);
 	struct power_supply *saved_usb_psy = NULL;
 	struct power_supply *ac_psy = NULL;
@@ -575,9 +574,7 @@ static int dwc3_otg_set_power(struct usb_phy *phy, unsigned mA)
 
 	ac_psy = power_supply_get_by_name("ac");
 
-	dcp = ((dotg->charger->chg_type == DWC3_DCP_CHARGER) ||
-	       (dotg->charger->chg_type == DWC3_PROPRIETARY_CHARGER));
-	if (dotg->charger->chg_type == dcp && ac_psy) {
+	if (dotg->charger->chg_type == DWC3_DCP_CHARGER && ac_psy) {
 		pr_info("%s: override dotg->psy to ac->psy\n", __func__);
 		saved_usb_psy = dotg->psy;
 		dotg->psy = ac_psy;
