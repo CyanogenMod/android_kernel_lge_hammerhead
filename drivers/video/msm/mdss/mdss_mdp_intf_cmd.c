@@ -818,6 +818,7 @@ int mdss_mdp_cmd_stop(struct mdss_mdp_ctl *ctl, int panel_power_state)
 	pr_debug("%s: transition from %d --> %d\n", __func__,
 		ctx->panel_power_state, panel_power_state);
 
+	mutex_lock(&ctl->offlock);
 	if (mdss_panel_is_power_off(panel_power_state)) {
 		/* Transition to display off */
 		send_panel_events = true;
@@ -948,6 +949,7 @@ end:
 		ctx->panel_power_state = panel_power_state;
 	MDSS_XLOG(ctl->num, ctx->koff_cnt, ctx->clk_enabled,
 				ctx->rdptr_enabled, XLOG_FUNC_EXIT);
+	mutex_unlock(&ctl->offlock);
 	pr_debug("%s:-\n", __func__);
 
 	return ret;
