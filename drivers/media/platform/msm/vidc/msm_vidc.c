@@ -499,8 +499,9 @@ int map_and_register_buf(struct msm_vidc_inst *inst, struct v4l2_buffer *b)
 		if (rc < 0)
 			goto exit;
 
-		temp = get_same_fd_buffer(inst, &inst->registered_bufs,
-					b->m.planes[i].reserved[0], &plane);
+		if (!is_dynamic_output_buffer_mode(b, inst))
+			temp = get_same_fd_buffer(inst, &inst->registered_bufs,
+						b->m.planes[i].reserved[0], &plane);
 
 		populate_buf_info(binfo, b, i);
 		if (temp) {
