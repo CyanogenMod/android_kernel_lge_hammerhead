@@ -143,5 +143,6 @@
 		qcom,mdss-dsi-off-command-state = "dsi_hs_mode";
 		qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_wled";
 		qcom,cont-splash-enabled;
+		qcom,ulps-enabled;
 	};
 };
