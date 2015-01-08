@@ -404,6 +404,7 @@ static struct clk_lookup kpss_clocks_8974[] = {
 	CLK_LOOKUP("cpu1_clk",	krait1_clk.c, "fe805664.qcom,pm-8x60"),
 	CLK_LOOKUP("cpu2_clk",	krait2_clk.c, "fe805664.qcom,pm-8x60"),
 	CLK_LOOKUP("cpu3_clk",	krait3_clk.c, "fe805664.qcom,pm-8x60"),
+	CLK_LOOKUP("devfreq_clk", l2_clk.c,   "0.qcom,cache"),
 };
 
 static struct clk *cpu_clk[] = {

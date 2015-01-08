@@ -1607,10 +1607,10 @@
 			< 2265600000  925000 691 >;
 	};
 
-	cache: qcom,cache {
+	cache: qcom,cache@0 {
+		reg = <0 4>;
 		compatible = "devfreq-simple-dev";
 		clock-names = "devfreq_clk";
-		clocks = <&clock_krait clk_l2_clk>;
 		governor = "cpufreq";
 		freq-tbl-khz =
 			<  300000 >,
