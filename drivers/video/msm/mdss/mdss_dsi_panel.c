@@ -1306,7 +1306,7 @@ static void send_local_on_cmds(struct work_struct *work)
 	struct mdss_panel_info *pinfo;
 
 	pinfo = &(local_ctrl->panel_data.panel_info);
-	if (pinfo->cont_splash_enabled)
+	if (pinfo->cont_splash_enabled || pinfo->ulps_feature_enabled)
 		return;
 
 	mutex_lock(&panel_cmd_mutex);
