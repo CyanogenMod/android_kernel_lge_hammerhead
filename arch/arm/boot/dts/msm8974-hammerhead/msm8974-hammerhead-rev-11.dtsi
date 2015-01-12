@@ -41,6 +41,7 @@
 
 &mdss_mdp {
 	qcom,mdss-pref-prim-intf = "dsi";
+	qcom,mdss-idle-power-collapse-enabled;
 };
 
 &mdss_dsi0 {
