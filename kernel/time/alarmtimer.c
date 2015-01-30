@@ -75,6 +75,7 @@ void power_on_alarm_init(void)
 		power_on_alarm = 0;
 }
 
+
 void set_power_on_alarm(long secs, bool enable)
 {
 	int rc;
