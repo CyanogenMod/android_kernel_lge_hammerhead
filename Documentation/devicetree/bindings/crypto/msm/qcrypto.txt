@@ -12,10 +12,18 @@ Required properties:
   - qcom,msm_bus,active-only: Boolean flag for context of request (actve/dual)
   - qcom,msm_bus,num_paths: The paths for source and destination ports
   - qcom,msm_bus,vectors: Vectors for bus topology.
+  - qcom,ce-device: Device number.
 
 Optional properties:
   - qcom,ce-hw-shared : optional, indicates if the hardware is shared between EE.
   - qcom,ce-hw-key : optional, indicates if the hardware supports use of HW KEY.
+  - qcom,use-sw-aes-cbc-ecb-ctr-algo : optional, indicates if use SW aes-cbc/ecb/ctr algorithm.
+  - qcom,use-sw-aes-xts-algo : optional, indicates if use SW aes-xts algorithm.
+  - qcom,use-sw-aead-algo : optional, indicates if use SW aead algorithm.
+  - qcom,use-sw-ahash-algo : optional, indicates if use SW hash algorithm.
+  - qcom,use-sw-hmac-algo : optional, indicates if use SW hmac algorithm.
+  - qcom,use-sw-aes-ccm-algo : optional, indicates if use SW aes-ccm algorithm.
+  - qcom,clk-mgmt-sus-res : optional, indicate if the ce clocks need to be disabled/enabled in suspend/resume function.
 
 Example:
 
@@ -27,6 +35,7 @@ Example:
 		interrupts = <0 235 0>;
 		qcom,bam-pipe-pair = <1>;
 		qcom,ce-hw-instance = <1>;
+		qcom,ce-device = <0>;
 		qcom,ce-hw-shared;
                 qcom,msm-bus,name = "qcrypto-noc";
 		qcom,msm-bus,num-cases = <2>;
