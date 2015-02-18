@@ -131,12 +131,15 @@ static struct sk_buff_head *msm_ipc_router_build_msg(unsigned int num_sect,
 	int i, copied, first = 1;
 	int data_size = 0, request_size, offset;
 	void *data;
+	int last = 0;
+	int align_size;
 
 	for (i = 0; i < num_sect; i++)
 		data_size += msg_sect[i].iov_len;
 
 	if (!data_size)
 		return NULL;
+	align_size = ALIGN_SIZE(data_size);
 
 	msg_head = kmalloc(sizeof(struct sk_buff_head), GFP_KERNEL);
 	if (!msg_head) {
@@ -148,10 +151,14 @@ static struct sk_buff_head *msm_ipc_router_build_msg(unsigned int num_sect,
 	for (copied = 1, i = 0; copied && (i < num_sect); i++) {
 		data_size = msg_sect[i].iov_len;
 		offset = 0;
+		if (i == (num_sect - 1))
+			last = 1;
 		while (offset != msg_sect[i].iov_len) {
 			request_size = data_size;
 			if (first)
 				request_size += IPC_ROUTER_HDR_SIZE;
+			if (last)
+				request_size += align_size;
 
 			msg = alloc_skb(request_size, GFP_KERNEL);
 			if (!msg) {
@@ -161,6 +168,7 @@ static struct sk_buff_head *msm_ipc_router_build_msg(unsigned int num_sect,
 					goto msg_build_failure;
 				}
 				data_size = data_size / 2;
+				last = 0;
 				continue;
 			}
 
@@ -182,6 +190,8 @@ static struct sk_buff_head *msm_ipc_router_build_msg(unsigned int num_sect,
 			skb_queue_tail(msg_head, msg);
 			offset += data_size;
 			data_size = msg_sect[i].iov_len - offset;
+			if (i == (num_sect - 1))
+				last = 1;
 		}
 	}
 	return msg_head;
@@ -196,24 +206,23 @@ msg_build_failure:
 }
 
 static int msm_ipc_router_extract_msg(struct msghdr *m,
-				      struct sk_buff_head *msg_head)
+				      struct rr_packet *pkt)
 {
 	struct sockaddr_msm_ipc *addr;
-	struct rr_header *hdr;
+	struct rr_header_v1 *hdr;
 	struct sk_buff *temp;
 	union rr_control_msg *ctl_msg;
 	int offset = 0, data_len = 0, copy_len;
 
-	if (!m || !msg_head) {
+	if (!m || !pkt) {
 		pr_err("%s: Invalid pointers passed\n", __func__);
 		return -EINVAL;
 	}
 	addr = (struct sockaddr_msm_ipc *)m->msg_name;
 
-	temp = skb_peek(msg_head);
-	hdr = (struct rr_header *)(temp->data);
+	hdr = &(pkt->hdr);
 	if (addr && (hdr->type == IPC_ROUTER_CTRL_CMD_RESUME_TX)) {
-		skb_pull(temp, IPC_ROUTER_HDR_SIZE);
+		temp = skb_peek(pkt->pkt_fragment_q);
 		ctl_msg = (union rr_control_msg *)(temp->data);
 		addr->family = AF_MSM_IPC;
 		addr->address.addrtype = MSM_IPC_ADDR_ID;
@@ -222,7 +231,7 @@ static int msm_ipc_router_extract_msg(struct msghdr *m,
 		m->msg_namelen = sizeof(struct sockaddr_msm_ipc);
 		return offset;
 	}
-	if (addr && (hdr->src_port_id != IPC_ROUTER_ADDRESS)) {
+	if (addr && (hdr->type == IPC_ROUTER_CTRL_CMD_DATA)) {
 		addr->family = AF_MSM_IPC;
 		addr->address.addrtype = MSM_IPC_ADDR_ID;
 		addr->address.addr.port_addr.node_id = hdr->src_node_id;
@@ -231,8 +240,7 @@ static int msm_ipc_router_extract_msg(struct msghdr *m,
 	}
 
 	data_len = hdr->size;
-	skb_pull(temp, IPC_ROUTER_HDR_SIZE);
-	skb_queue_walk(msg_head, temp) {
+	skb_queue_walk(pkt->pkt_fragment_q, temp) {
 		copy_len = data_len < temp->len ? data_len : temp->len;
 		if (copy_to_user(m->msg_iov->iov_base + offset, temp->data,
 				 copy_len)) {
@@ -243,22 +251,6 @@ static int msm_ipc_router_extract_msg(struct msghdr *m,
 		data_len -= copy_len;
 	}
 	return offset;
-}
-
-static void msm_ipc_router_release_msg(struct sk_buff_head *msg_head)
-{
-	struct sk_buff *temp;
-
-	if (!msg_head) {
-		pr_err("%s: Invalid msg pointer\n", __func__);
-		return;
-	}
-
-	while (!skb_queue_empty(msg_head)) {
-		temp = skb_dequeue(msg_head);
-		kfree_skb(temp);
-	}
-	kfree(msg_head);
 }
 
 static int msm_ipc_router_create(struct net *net,
@@ -385,8 +377,16 @@ static int msm_ipc_router_sendmsg(struct kiocb *iocb, struct socket *sock,
 	if (ipc_buf)
 		msm_ipc_router_ipc_log(IPC_SEND, ipc_buf, port_ptr);
 	ret = msm_ipc_router_send_to(port_ptr, msg, &dest->address);
-	if (ret == (IPC_ROUTER_HDR_SIZE + total_len))
-		ret = total_len;
+	if (ret != total_len) {
+		if (ret < 0) {
+			if (ret != -EAGAIN)
+				pr_err("%s: Send_to failure %d\n",
+							__func__, ret);
+			msm_ipc_router_free_skb(msg);
+		} else if (ret >= 0) {
+			ret = -EFAULT;
+		}
+	}
 
 out_sendmsg:
 	release_sock(sk);
@@ -398,7 +398,7 @@ static int msm_ipc_router_recvmsg(struct kiocb *iocb, struct socket *sock,
 {
 	struct sock *sk = sock->sk;
 	struct msm_ipc_port *port_ptr = msm_ipc_sk_port(sk);
-	struct sk_buff_head *msg;
+	struct rr_packet *pkt;
 	struct sk_buff *ipc_buf;
 	long timeout;
 	int ret;
@@ -411,46 +411,26 @@ static int msm_ipc_router_recvmsg(struct kiocb *iocb, struct socket *sock,
 
 	lock_sock(sk);
 	timeout = sk->sk_rcvtimeo;
-	mutex_lock(&port_ptr->port_rx_q_lock_lhb3);
-	while (list_empty(&port_ptr->port_rx_q)) {
-		mutex_unlock(&port_ptr->port_rx_q_lock_lhb3);
+
+	ret = msm_ipc_router_rx_data_wait(port_ptr, timeout);
+	if (ret) {
 		release_sock(sk);
-		if (timeout < 0) {
-			ret = wait_event_interruptible(
-					port_ptr->port_rx_wait_q,
-					!list_empty(&port_ptr->port_rx_q));
-			if (ret)
-				return ret;
-		} else if (timeout > 0) {
-			timeout = wait_event_interruptible_timeout(
-					port_ptr->port_rx_wait_q,
-					!list_empty(&port_ptr->port_rx_q),
-					timeout);
-			if (timeout < 0)
-				return -EFAULT;
-		}
-
-		if (timeout == 0) {
+		if (ret == -ENOMSG)
 			m->msg_namelen = 0;
-			return 0;
-		}
-		lock_sock(sk);
-		mutex_lock(&port_ptr->port_rx_q_lock_lhb3);
+		return ret;
 	}
-	mutex_unlock(&port_ptr->port_rx_q_lock_lhb3);
 
-	ret = msm_ipc_router_read(port_ptr, &msg, buf_len);
-	if (ret <= 0 || !msg) {
+	ret = msm_ipc_router_read(port_ptr, &pkt, buf_len);
+	if (ret <= 0 || !pkt) {
 		release_sock(sk);
 		return ret;
 	}
 
-	ret = msm_ipc_router_extract_msg(m, msg);
-	ipc_buf = skb_peek(msg);
+	ret = msm_ipc_router_extract_msg(m, pkt);
+	ipc_buf = skb_peek(pkt->pkt_fragment_q);
 	if (ipc_buf)
 		msm_ipc_router_ipc_log(IPC_RECV, ipc_buf, port_ptr);
-	msm_ipc_router_release_msg(msg);
-	msg = NULL;
+	release_pkt(pkt);
 	release_sock(sk);
 	return ret;
 }
@@ -479,7 +459,7 @@ static int msm_ipc_router_ioctl(struct socket *sock,
 
 	switch (cmd) {
 	case IPC_ROUTER_IOCTL_GET_VERSION:
-		n = IPC_ROUTER_VERSION;
+		n = IPC_ROUTER_V1;
 		ret = put_user(n, (unsigned int *)arg);
 		break;
 
@@ -609,17 +589,24 @@ static const struct net_proto_family msm_ipc_family_ops = {
 };
 
 static const struct proto_ops msm_ipc_proto_ops = {
-	.owner		= THIS_MODULE,
 	.family         = AF_MSM_IPC,
+	.owner		= THIS_MODULE,
+	.release        = msm_ipc_router_close,
 	.bind		= msm_ipc_router_bind,
 	.connect	= sock_no_connect,
+	.socketpair	= sock_no_socketpair,
+	.accept		= sock_no_accept,
+	.getname	= sock_no_getname,
+	.poll           = msm_ipc_router_poll,
+	.ioctl          = msm_ipc_router_ioctl,
+	.listen		= sock_no_listen,
+	.shutdown	= sock_no_shutdown,
+	.setsockopt     = sock_no_setsockopt,
+	.getsockopt     = sock_no_getsockopt,
 	.sendmsg	= msm_ipc_router_sendmsg,
 	.recvmsg	= msm_ipc_router_recvmsg,
-	.ioctl		= msm_ipc_router_ioctl,
-	.poll		= msm_ipc_router_poll,
-	.setsockopt	= sock_no_setsockopt,
-	.getsockopt	= sock_no_getsockopt,
-	.release	= msm_ipc_router_close,
+	.mmap		= sock_no_mmap,
+	.sendpage	= sock_no_sendpage,
 };
 
 static struct proto msm_ipc_proto = {
