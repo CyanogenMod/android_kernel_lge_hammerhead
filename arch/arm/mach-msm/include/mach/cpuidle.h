@@ -27,6 +27,7 @@ struct msm_cpuidle_state {
 
 #ifdef CONFIG_PM
 s32 msm_cpuidle_get_deep_idle_latency(void);
+void lpm_suspend_wake_time(uint64_t wakeup_time);
 #else
 static inline s32 msm_cpuidle_get_deep_idle_latency(void) { return 0; }
 #endif
