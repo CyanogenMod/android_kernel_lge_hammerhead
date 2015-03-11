@@ -2302,7 +2302,7 @@ static int hdmi_tx_get_audio_edid_blk(struct platform_device *pdev,
 	}
 
 	if (!hdmi_ctrl->audio_sdev.state) {
-		DEV_ERR("%s: failed. HDMI is not connected/ready for audio\n",
+		DEV_DBG("%s: failed. HDMI is not connected/ready for audio\n",
 			__func__);
 		return -EPERM;
 	}
