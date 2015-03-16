@@ -33,7 +33,126 @@ static struct mdss_dsi_ctrl_pdata *local_ctrl;
 static struct work_struct send_cmds_work;
 static struct kobject *module_kobj;
 
+static struct dsi_panel_cmds cabc_off_sequence;
+static struct dsi_panel_cmds cabc_user_interface_image_sequence;
+static struct dsi_panel_cmds cabc_still_image_sequence;
+static struct dsi_panel_cmds cabc_video_image_sequence;
+static struct dsi_panel_cmds cabc_sre_sequence;
+
 static DEFINE_MUTEX(panel_cmd_mutex);
+
+static void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
+			struct dsi_panel_cmds *pcmds);
+
+static int mdss_dsi_update_cabc_level(struct mdss_dsi_ctrl_pdata *ctrl)
+{
+	int ret = 0;
+	struct mdss_panel_info *pinfo = NULL;
+
+	if (ctrl == NULL) {
+		pr_err("%s: Invalid input data\n", __func__);
+		return -EINVAL;
+	}
+
+	pinfo = &(ctrl->panel_data.panel_info);
+
+	if (!pinfo->cabc_available)
+		goto done;
+
+	pr_info("%s: update cabc level=%d sre=%d\n", __func__,
+			pinfo->cabc_mode, pinfo->sre_enabled);
+
+	if (pinfo->sre_available && pinfo->sre_enabled) {
+		mdss_dsi_panel_cmds_send(ctrl, &cabc_sre_sequence);
+		goto done;
+	}
+
+	switch (pinfo->cabc_mode) {
+	case 0:
+		mdss_dsi_panel_cmds_send(ctrl, &cabc_off_sequence);
+		break;
+	case 1:
+		mdss_dsi_panel_cmds_send(ctrl,
+			&cabc_user_interface_image_sequence);
+		break;
+	case 2:
+		mdss_dsi_panel_cmds_send(ctrl, &cabc_still_image_sequence);
+		break;
+	case 3:
+		mdss_dsi_panel_cmds_send(ctrl, &cabc_video_image_sequence);
+		break;
+	default:
+		pr_err("%s: cabc level %d is not supported!\n", __func__,
+			pinfo->cabc_mode);
+		ret = -EINVAL;
+		break;
+	}
+
+done:
+	return ret;
+}
+
+int mdss_dsi_panel_set_cabc(struct mdss_panel_data *pdata, int level)
+{
+	int ret = 0;
+	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
+	struct mdss_panel_info *pinfo = NULL;
+
+	if (pdata == NULL) {
+		pr_err("%s: Invalid input data\n", __func__);
+		return -EINVAL;
+	}
+
+	ctrl = container_of(pdata, struct mdss_dsi_ctrl_pdata, panel_data);
+	pinfo = &(ctrl->panel_data.panel_info);
+
+	if (!pinfo->cabc_available)
+		return 0;
+
+	mutex_lock(&panel_cmd_mutex);
+	if (level < 0 || level > 3) {
+		pr_err("%s: valid cabc values are 0-3\n", __func__);
+		goto out;
+	}
+
+	pinfo->cabc_mode = level;
+
+	if (pinfo->panel_power_state != MDSS_PANEL_POWER_ON) {
+		pr_info("%s: lcd is off, queued cabc change\n", __func__);
+		goto out;
+	}
+
+	ret = mdss_dsi_update_cabc_level(ctrl);
+
+out:
+	mutex_unlock(&panel_cmd_mutex);
+	return ret;
+
+}
+
+int mdss_dsi_panel_set_sre(struct mdss_panel_data *pdata, bool enable)
+{
+	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
+	struct mdss_panel_info *pinfo = NULL;
+
+	if (pdata == NULL) {
+		pr_err("%s: Invalid input data\n", __func__);
+		return -EINVAL;
+	}
+
+	ctrl = container_of(pdata, struct mdss_dsi_ctrl_pdata, panel_data);
+	pinfo = &(ctrl->panel_data.panel_info);
+
+	if (!pinfo->cabc_available || !pinfo->sre_available ||
+		enable == pinfo->sre_enabled)
+		return 0;
+
+	mutex_lock(&panel_cmd_mutex);
+	pinfo->sre_enabled = enable;
+	mutex_unlock(&panel_cmd_mutex);
+
+	return mdss_dsi_update_cabc_level(ctrl);
+}
 
 DEFINE_LED_TRIGGER(bl_led_trigger);
 
@@ -461,6 +580,8 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 	mutex_lock(&panel_cmd_mutex);
 	if (local_ctrl->on_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &local_ctrl->on_cmds);
+
+	mdss_dsi_update_cabc_level(ctrl);
 	mutex_unlock(&panel_cmd_mutex);
 
 	pdata->panel_info.blank_state = MDSS_PANEL_BLANK_UNBLANK;
@@ -1215,6 +1336,26 @@ static int mdss_panel_parse_dt(struct device_node *np,
 	rc = of_property_read_u32(np, "qcom,mdss-dsi-panel-status-value", &tmp);
 	ctrl_pdata->status_value = (!rc ? tmp : 0);
 
+	rc = mdss_dsi_parse_dcs_cmds(np, &cabc_off_sequence,
+		"qcom,mdss-dsi-cabc-off-command", "qcom,mdss-dsi-off-command-state");
+
+	pinfo->cabc_available =
+			!rc ? 1 : 0;
+
+	mdss_dsi_parse_dcs_cmds(np, &cabc_user_interface_image_sequence,
+		"qcom,mdss-dsi-cabc-ui-command", "qcom,mdss-dsi-off-command-state");
+
+	mdss_dsi_parse_dcs_cmds(np, &cabc_still_image_sequence,
+		"qcom,mdss-dsi-cabc-still-image-command", "qcom,mdss-dsi-off-command-state");
+
+	mdss_dsi_parse_dcs_cmds(np, &cabc_video_image_sequence,
+		"qcom,mdss-dsi-cabc-video-command", "qcom,mdss-dsi-off-command-state");
+
+	rc = mdss_dsi_parse_dcs_cmds(np, &cabc_sre_sequence,
+		"qcom,mdss-dsi-sre-ui-command", "qcom,mdss-dsi-off-command-state");
+
+	pinfo->sre_available =
+			!rc ? 1 : 0;
 
 	ctrl_pdata->status_mode = ESD_MAX;
 	rc = of_property_read_string(np,
