@@ -1690,5 +1690,19 @@ static inline unsigned int debug_guardpage_minorder(void) { return 0; }
 static inline bool page_is_guard(struct page *page) { return false; }
 #endif /* CONFIG_DEBUG_PAGEALLOC */
 
+#ifdef CONFIG_PROCESS_RECLAIM
+struct reclaim_param {
+	struct vm_area_struct *vma;
+	/* Number of pages scanned */
+	int nr_scanned;
+	/* max pages to reclaim */
+	int nr_to_reclaim;
+	/* pages reclaimed */
+	int nr_reclaimed;
+};
+extern struct reclaim_param reclaim_task_anon(struct task_struct *task,
+		int nr_to_reclaim);
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _LINUX_MM_H */
