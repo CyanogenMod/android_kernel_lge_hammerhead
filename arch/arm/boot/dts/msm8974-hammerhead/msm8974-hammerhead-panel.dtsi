@@ -61,6 +61,16 @@
 		qcom,mdss-dsi-panel-timings = [
 			c1 3d 34 00 58 4d
 			36 3f 53 03 04 00];
+		qcom,mdss-dsi-regulator-settings = [
+			03 01 01 00 20 00 01];
+		qcom,mdss-dsi-strength-ctrl = [
+			bb 06];
+		qcom,mdss-dsi-lane-config = [
+			00 c2 45 00 00 00 00 01 75
+			00 c2 45 00 00 00 00 01 75
+			00 c2 45 00 00 00 00 01 75
+			00 c2 45 00 00 00 00 01 75
+			00 02 45 00 00 00 00 01 97];
 		qcom,mdss-dsi-on-command = [
 			15 01 00 00 00 00 02 00 00
 			39 01 00 00 00 00 05
