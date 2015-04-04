@@ -1317,8 +1317,11 @@ int dsi_panel_device_register(struct device_node *pan_node,
 		return rc;
 	}
 
-	data = of_get_property(ctrl_pdev->dev.of_node,
-		"qcom,platform-strength-ctrl", &len);
+	data = of_get_property(pan_node,
+		"qcom,mdss-dsi-strength-ctrl", &len);
+	if (!data)
+		data = of_get_property(ctrl_pdev->dev.of_node,
+			"qcom,platform-strength-ctrl", &len);
 	if ((!data) || (len != 2)) {
 		pr_err("%s:%d, Unable to read Phy Strength ctrl settings",
 			__func__, __LINE__);
@@ -1327,8 +1330,11 @@ int dsi_panel_device_register(struct device_node *pan_node,
 	pinfo->mipi.dsi_phy_db.strength[0] = data[0];
 	pinfo->mipi.dsi_phy_db.strength[1] = data[1];
 
-	data = of_get_property(ctrl_pdev->dev.of_node,
-		"qcom,platform-regulator-settings", &len);
+	data = of_get_property(pan_node,
+		"qcom,mdss-dsi-regulator-settings", &len);
+	if (!data)
+		data = of_get_property(ctrl_pdev->dev.of_node,
+			"qcom,platform-regulator-settings", &len);
 	if ((!data) || (len != 7)) {
 		pr_err("%s:%d, Unable to read Phy regulator settings",
 			__func__, __LINE__);
@@ -1339,8 +1345,11 @@ int dsi_panel_device_register(struct device_node *pan_node,
 			= data[i];
 	}
 
-	data = of_get_property(ctrl_pdev->dev.of_node,
-		"qcom,platform-bist-ctrl", &len);
+	data = of_get_property(pan_node,
+		"qcom,mdss-dsi-bist-ctrl", &len);
+	if (!data)
+		data = of_get_property(ctrl_pdev->dev.of_node,
+			"qcom,platform-bist-ctrl", &len);
 	if ((!data) || (len != 6)) {
 		pr_err("%s:%d, Unable to read Phy Bist Ctrl settings",
 			__func__, __LINE__);
@@ -1351,8 +1360,11 @@ int dsi_panel_device_register(struct device_node *pan_node,
 			= data[i];
 	}
 
-	data = of_get_property(ctrl_pdev->dev.of_node,
-		"qcom,platform-lane-config", &len);
+	data = of_get_property(pan_node,
+		"qcom,mdss-dsi-lane-config", &len);
+	if (!data)
+		data = of_get_property(ctrl_pdev->dev.of_node,
+			"qcom,platform-lane-config", &len);
 	if ((!data) || (len != 45)) {
 		pr_err("%s:%d, Unable to read Phy lane configure settings",
 			__func__, __LINE__);
