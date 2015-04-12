@@ -1019,6 +1019,10 @@ int mdss_mdp_overlay_start(struct msm_fb_data_type *mfd)
 
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
 
+	if (mdp5_data->mdata->idle_pc_enabled !=
+	    mdp5_data->mdata->enable_idle_pc)
+		mdss_mdp_enable_idle_pc(mdp5_data->mdata);
+
 	/*
 	 * If idle pc feature is not enabled, then get a reference to the
 	 * runtime device which will be released when overlay is turned off
@@ -2999,6 +3003,10 @@ ctl_stop:
 					pr_err("unable to suspend w/pm_runtime_put (%d)\n",
 						rc);
 			}
+
+			if (mdp5_data->mdata->idle_pc_enabled !=
+			    mdp5_data->mdata->enable_idle_pc)
+				mdss_mdp_enable_idle_pc(mdp5_data->mdata);
 		}
 	}
 
