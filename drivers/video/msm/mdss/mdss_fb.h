@@ -30,9 +30,14 @@
 #define MSM_FB_ENABLE_DBGFS
 #define WAIT_FENCE_FIRST_TIMEOUT (3 * MSEC_PER_SEC)
 #define WAIT_FENCE_FINAL_TIMEOUT (10 * MSEC_PER_SEC)
-/* Display op timeout should be greater than total timeout */
+/*
+ * Display op timeout should be greater than total time it can take for
+ * a display thread to commit one frame. One of the largest time consuming
+ * activity performed by display thread is waiting for fences. So keeping
+ * that as a reference and add additional 20s to sustain system holdups.
+ */
 #define WAIT_DISP_OP_TIMEOUT ((WAIT_FENCE_FIRST_TIMEOUT + \
-		WAIT_FENCE_FINAL_TIMEOUT) * MDP_MAX_FENCE_FD)
+		WAIT_FENCE_FINAL_TIMEOUT) + (20 * MSEC_PER_SEC))
 
 #ifndef MAX
 #define  MAX(x, y) (((x) > (y)) ? (x) : (y))
