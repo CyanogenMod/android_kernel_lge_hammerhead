@@ -57,6 +57,20 @@ static struct gpiomux_setting lcd_en_sus_cfg = {
 	.pull = GPIOMUX_PULL_DOWN,
 };
 
+static struct gpiomux_setting lcd_te_act_cfg = {
+	.func = GPIOMUX_FUNC_1,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_DOWN,
+	.dir = GPIOMUX_IN,
+};
+
+static struct gpiomux_setting lcd_te_sus_cfg = {
+	.func = GPIOMUX_FUNC_1,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_DOWN,
+	.dir = GPIOMUX_IN,
+};
+
 static struct gpiomux_setting taiko_reset = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_6MA,
@@ -638,6 +652,16 @@ static struct msm_gpiomux_config msm8974_pri_auxpcm_configs[] __initdata = {
 		.settings = {
 			[GPIOMUX_SUSPENDED] = &auxpcm_sus_cfg,
 			[GPIOMUX_ACTIVE] = &auxpcm_act_cfg,
+		},
+	},
+};
+
+static struct msm_gpiomux_config msm_lcd_te_configs[] __initdata = {
+	{
+		.gpio = 12,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &lcd_te_act_cfg,
+			[GPIOMUX_SUSPENDED] = &lcd_te_sus_cfg,
 		},
 	},
 };
@@ -1260,6 +1284,9 @@ void __init msm_8974_init_gpiomux(void)
 
 	msm_gpiomux_install(slimport_configs,
 					ARRAY_SIZE(slimport_configs));
+
+	msm_gpiomux_install(msm_lcd_te_configs,
+					ARRAY_SIZE(msm_lcd_te_configs));
 
 	if (HW_REV_F == lge_get_board_revno()) {
 		msm_gpiomux_install_nowrite(msm_display_configs_rev_f,
