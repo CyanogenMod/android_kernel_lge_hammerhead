@@ -1616,6 +1616,25 @@ static void sdhci_cfg_async_intr(struct sdhci_host *host, bool enable)
 			     SDHCI_HOST_CONTROL2);
 }
 
+void sdhci_unvote_all_pm_qos(struct sdhci_host *host)
+{
+	if (unlikely(!host->cpu_dma_latency_us))
+		return;
+
+	/*
+	 * This explicitly unvote all pm_qos request from sdhci driver.
+	 * This call can be used by LLD before going to suspend to
+	 * make sure that no qos vote has been held up after
+	 * driver suspend.
+	 */
+	pm_qos_update_request(&host->pm_qos_req_dma,
+		PM_QOS_DEFAULT_VALUE);
+
+	pr_debug("%s: %s: unvote ===all pm_qos=== votes\n",
+			mmc_hostname(host->mmc), __func__);
+}
+EXPORT_SYMBOL(sdhci_unvote_all_pm_qos);
+
 static void sdhci_cfg_irq(struct sdhci_host *host, bool enable)
 {
 	if (enable && !host->irq_enabled) {
