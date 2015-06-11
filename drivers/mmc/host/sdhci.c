@@ -1669,6 +1669,39 @@ static void sdhci_cfg_async_intr(struct sdhci_host *host, bool enable)
 			     SDHCI_HOST_CONTROL2);
 }
 
+void sdhci_unvote_all_pm_qos(struct sdhci_host *host)
+{
+	struct sdhci_host_qos *host_qos = host->host_qos;
+
+	cancel_delayed_work_sync(&host->pm_qos_work);
+
+	/*
+	 * This explicitly unvote all pm_qos request from sdhci driver.
+	 * This call can be used by LLD before going to suspend to
+	 * make sure that no qos vote has been held up after
+	 * driver suspend.
+	 */
+	if (host_qos[SDHCI_QOS_READ_WRITE].cpu_dma_latency_us) {
+		if (host->host_use_default_qos) {
+			pm_qos_update_request(
+			&(host_qos[SDHCI_QOS_READ_WRITE].pm_qos_req_dma),
+				PM_QOS_DEFAULT_VALUE);
+
+		} else {
+			pm_qos_update_request(
+				&(host_qos[SDHCI_QOS_READ].pm_qos_req_dma),
+				PM_QOS_DEFAULT_VALUE);
+			pm_qos_update_request(
+				&(host_qos[SDHCI_QOS_WRITE].pm_qos_req_dma),
+				PM_QOS_DEFAULT_VALUE);
+		}
+	}
+	pr_debug("%s: %s: unvote ===all pm_qos=== votes\n",
+			mmc_hostname(host->mmc), __func__);
+	return;
+}
+EXPORT_SYMBOL(sdhci_unvote_all_pm_qos);
+
 static void sdhci_cfg_irq(struct sdhci_host *host, bool enable)
 {
 	if (enable && !host->irq_enabled) {
@@ -3751,10 +3784,10 @@ void sdhci_remove_host(struct sdhci_host *host, int dead)
 
 	sdhci_disable_card_detection(host);
 	if (host->host_qos[SDHCI_QOS_READ_WRITE].cpu_dma_latency_us) {
-		if (host->host_use_default_qos)
+		if (host->host_use_default_qos) {
 			pm_qos_remove_request(
 			&(host->host_qos[SDHCI_QOS_READ_WRITE].pm_qos_req_dma));
-		else {
+		} else {
 			pm_qos_remove_request(
 			&(host->host_qos[SDHCI_QOS_READ].pm_qos_req_dma));
 			pm_qos_remove_request(
