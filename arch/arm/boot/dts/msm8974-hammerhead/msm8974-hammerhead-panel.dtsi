@@ -58,6 +58,10 @@
 		qcom,mdss-dsi-panel-framerate = <60>;
 		qcom,mdss-dsi-panel-clockrate = <804667392>;
 		qcom,mdss-dsi-te-dcs-command = <1>;
+		qcom,mdss-dsi-reset-sequence = <1 15>, <0 20>, <1 15>;
+		qcom,mdss-dsi-on-pre-reset-delay = <20>;
+		qcom,mdss-dsi-off-pre-reset-delay = <20>;
+		qcom,mdss-dsi-off-post-reset-delay = <20>;
 		qcom,mdss-dsi-panel-timings = [
 			c1 3d 34 00 58 4d
 			36 3f 53 03 04 00];
