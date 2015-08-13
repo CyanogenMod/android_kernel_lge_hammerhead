@@ -255,6 +255,12 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 			return rc;
 		}
 		if (!pinfo->cont_splash_enabled) {
+			if (pinfo->on_pre_rst_delay) {
+				pr_debug("%s: on_pre_rst_delay:%d\n",
+						__func__, pinfo->on_pre_rst_delay);
+				usleep(pinfo->on_pre_rst_delay * 1000);
+			}
+
 			if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
 				gpio_set_value((ctrl_pdata->disp_en_gpio), 1);
 
@@ -1303,6 +1309,9 @@ static int mdss_panel_parse_dt(struct device_node *np,
 		else if (!strcmp(data, "reg_read"))
 			ctrl_pdata->status_mode = ESD_REG;
 	}
+
+	rc = of_property_read_u32(np, "qcom,mdss-dsi-on-pre-reset-delay", &tmp);
+	pinfo->on_pre_rst_delay = (!rc ? tmp : 0);
 
 	rc = of_property_read_u32(np, "qcom,mdss-dsi-off-pre-reset-delay", &tmp);
 	pinfo->off_pre_rst_delay = (!rc ? tmp : 0);

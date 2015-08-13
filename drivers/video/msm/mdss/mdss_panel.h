@@ -324,6 +324,7 @@ struct mdss_panel_info {
 	u32 out_format;
 	u32 rst_seq[MDSS_DSI_RST_SEQ_LEN];
 	u32 rst_seq_len;
+	u32 on_pre_rst_delay;
 	u32 off_pre_rst_delay;
 	u32 off_post_rst_delay;
 	u32 vic; /* video identification code */
