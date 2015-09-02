@@ -1197,11 +1197,17 @@ static int mdss_fb_blank_unblank(struct msm_fb_data_type *mfd)
 	if (!mfd)
 		return -EINVAL;
 
+	ret = mdss_iommu_ctrl(1);
+	if (IS_ERR_VALUE(ret)) {
+		pr_err("mdss iommu attach failed ret=%d\n", ret);
+		return ret;
+	}
+
 	/* Start Display thread */
 	if (mfd->disp_thread == NULL) {
 		ret = mdss_fb_start_disp_thread(mfd);
 		if (IS_ERR_VALUE(ret))
-			return ret;
+			goto error;
 	}
 
 	cur_power_state = mfd->panel_power_state;
@@ -1210,7 +1216,8 @@ static int mdss_fb_blank_unblank(struct msm_fb_data_type *mfd)
 
 	if (mdss_panel_is_power_on_interactive(cur_power_state)) {
 		pr_debug("No change in power state\n");
-		return 0;
+		ret = 0;
+		goto error;
 	}
 
 	if (mfd->mdp.on_fnc) {
@@ -1244,6 +1251,7 @@ static int mdss_fb_blank_unblank(struct msm_fb_data_type *mfd)
 	}
 
 error:
+	mdss_iommu_ctrl(0);
 	return ret;
 }
 
