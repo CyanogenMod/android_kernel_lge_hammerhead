@@ -224,10 +224,11 @@ static int __bw_hwmon_sample_end(struct bw_hwmon *hwmon)
 	 * bandwidth usage and do the bandwidth calculation based on just
 	 * this micro sample.
 	 */
-	if (mbps > node->up_wake_mbps)
+	if (mbps > node->up_wake_mbps) {
 		wake = UP_WAKE;
-	else if (mbps < node->down_wake_mbps) {
-		node->down_cnt--;
+	} else if (mbps < node->down_wake_mbps) {
+		if (node->down_cnt)
+			node->down_cnt--;
 		if (node->down_cnt <= 0)
 			wake = DOWN_WAKE;
 	}
@@ -342,15 +343,6 @@ static unsigned long get_bw_and_set_irq(struct hwmon_node *node,
 		req_mbps += ((meas_mbps - node->prev_req)
 				* node->up_scale) / 100;
 		/*
-		 * Don't drop below max_mbps which caused the UP_WAKE if
-		 * down_thres is enabled. This is functionally equivalent of
-		 * two adjacent decision windows overlapping by one short
-		 * sample window when an UP_WAKE happens.
-		 */
-		node->max_mbps = meas_mbps;
-		node->down_cnt = node->down_count;
-
-		/*
 		 * However if the measured load is less than the historic
 		 * peak, but the over request is higher than the historic
 		 * peak, then we could limit the over requesting to the
@@ -361,13 +353,6 @@ static unsigned long get_bw_and_set_irq(struct hwmon_node *node,
 			req_mbps = node->hist_max_mbps;
 
 		req_mbps = min(req_mbps, meas_mbps_zone);
-	} else {
-		/*
-		 * We want to quickly drop the vote only if we are
-		 * over-voting (UP_WAKE). So, effectively disable it for all
-		 * other cases by setting it to a very large value.
-		 */
-		node->down_cnt = INT_MAX;
 	}
 
 	hyst_lo_tol = (node->hyst_mbps * HIST_PEAK_TOL) / 100;
@@ -424,6 +409,7 @@ static unsigned long get_bw_and_set_irq(struct hwmon_node *node,
 		node->down_wake_mbps = (meas_mbps * node->down_thres) / 100;
 		thres = mbps_to_bytes(meas_mbps, node->sample_ms);
 	}
+	node->down_cnt = node->down_count;
 
 	node->bytes = hw->set_thres(hw, thres);
 
@@ -691,6 +677,47 @@ static int devfreq_bw_hwmon_get_freq(struct devfreq *df,
 	return 0;
 }
 
+static ssize_t store_throttle_adj(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct devfreq *df = to_devfreq(dev);
+	struct hwmon_node *node = df->data;
+	int ret;
+	unsigned int val;
+
+	if (!node->hw->set_throttle_adj)
+		return -ENOSYS;
+
+	ret = kstrtouint(buf, 10, &val);
+	if (ret)
+		return ret;
+
+	ret = node->hw->set_throttle_adj(node->hw, val);
+
+	if (!ret)
+		return count;
+	else
+		return ret;
+}
+
+static ssize_t show_throttle_adj(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	struct devfreq *df = to_devfreq(dev);
+	struct hwmon_node *node = df->data;
+	unsigned int val;
+
+	if (!node->hw->get_throttle_adj)
+		val = 0;
+	else
+		val = node->hw->get_throttle_adj(node->hw);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", val);
+}
+
+static DEVICE_ATTR(throttle_adj, 0644, show_throttle_adj,
+						store_throttle_adj);
+
 gov_attr(guard_band_mbps, 0U, 2000U);
 gov_attr(decay_rate, 0U, 100U);
 gov_attr(io_percent, 1U, 100U);
@@ -729,6 +756,7 @@ static struct attribute *dev_attr[] = {
 	&dev_attr_low_power_io_percent.attr,
 	&dev_attr_low_power_delay.attr,
 	&dev_attr_mbps_zones.attr,
+	&dev_attr_throttle_adj.attr,
 	NULL,
 };
 

@@ -24,6 +24,8 @@
  * @set_thres:			Set the count threshold to generate an IRQ
  * @get_bytes_and_clear:	Get the bytes transferred since the last call
  *				and reset the counter to start over.
+ * @set_throttle_adj:		Set throttle adjust field to the given value
+ * @get_throttle_adj:		Get the value written to throttle adjust field
  * @get_bytes_per_beat:		Get the number of bytes per beat
  * @dev:			Pointer to device that this HW monitor can
  *				monitor.
@@ -48,6 +50,8 @@ struct bw_hwmon {
 	int (*resume_hwmon)(struct bw_hwmon *hw);
 	unsigned long (*set_thres)(struct bw_hwmon *hw, unsigned long bytes);
 	unsigned long (*get_bytes_and_clear)(struct bw_hwmon *hw);
+	int (*set_throttle_adj)(struct bw_hwmon *hw, uint adj);
+	u32 (*get_throttle_adj)(struct bw_hwmon *hw);
 	u32 (*get_bytes_per_beat)(void);
 	struct device *dev;
 	struct device_node *of_node;

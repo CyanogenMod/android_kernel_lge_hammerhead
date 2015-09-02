@@ -43,6 +43,7 @@
 struct bwmon_spec {
 	bool wrap_on_thres;
 	bool overflow;
+	bool throt_adj;
 };
 
 struct bwmon {
@@ -53,6 +54,7 @@ struct bwmon {
 	const struct bwmon_spec *spec;
 	struct device *dev;
 	struct bw_hwmon hw;
+	u32 throttle_adj;
 };
 
 #define to_bwmon(ptr)		container_of(ptr, struct bwmon, hw)
@@ -130,6 +132,26 @@ static void mon_irq_clear(struct bwmon *m)
 	mb();
 	writel_relaxed(1 << m->mport, GLB_INT_CLR(m));
 	mb();
+}
+
+static int mon_set_throttle_adj(struct bw_hwmon *hw, uint adj)
+{
+	struct bwmon *m = to_bwmon(hw);
+
+	if (adj > THROTTLE_MASK)
+		return -EINVAL;
+
+	adj = (adj & THROTTLE_MASK) << THROTTLE_SHIFT;
+	m->throttle_adj = adj;
+
+	return 0;
+}
+
+static u32 mon_get_throttle_adj(struct bw_hwmon *hw)
+{
+	struct bwmon *m = to_bwmon(hw);
+
+	return m->throttle_adj >> THROTTLE_SHIFT;
 }
 
 static void mon_set_limit(struct bwmon *m, u32 count)
@@ -311,13 +333,15 @@ static int resume_bw_hwmon(struct bw_hwmon *hw)
 /*************************************************************************/
 
 static const struct bwmon_spec spec[] = {
-	{ .wrap_on_thres = true, .overflow = false },
-	{ .wrap_on_thres = false, .overflow = true },
+	{ .wrap_on_thres = true, .overflow = false, .throt_adj = false},
+	{ .wrap_on_thres = false, .overflow = true, .throt_adj = false},
+	{ .wrap_on_thres = false, .overflow = true, .throt_adj = true},
 };
 
 static struct of_device_id match_table[] = {
 	{ .compatible = "qcom,bimc-bwmon", .data = &spec[0] },
 	{ .compatible = "qcom,bimc-bwmon2", .data = &spec[1] },
+	{ .compatible = "qcom,bimc-bwmon3", .data = &spec[2] },
 	{}
 };
 
@@ -386,6 +410,10 @@ static int bimc_bwmon_driver_probe(struct platform_device *pdev)
 	m->hw.resume_hwmon = &resume_bw_hwmon;
 	m->hw.get_bytes_and_clear = &get_bytes_and_clear;
 	m->hw.set_thres = &set_thres;
+	if (m->spec->throt_adj) {
+		m->hw.set_throttle_adj = &mon_set_throttle_adj;
+		m->hw.get_throttle_adj = &mon_get_throttle_adj;
+	}
 
 	ret = register_bw_hwmon(dev, &m->hw);
 	if (ret) {
