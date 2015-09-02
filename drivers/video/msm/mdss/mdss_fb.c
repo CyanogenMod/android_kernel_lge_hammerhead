@@ -1197,6 +1197,12 @@ static int mdss_fb_blank_unblank(struct msm_fb_data_type *mfd)
 	if (!mfd)
 		return -EINVAL;
 
+	ret = mdss_iommu_ctrl(1);
+	if (IS_ERR_VALUE(ret)) {
+		pr_err("mdss iommu attach failed ret=%d\n", ret);
+		goto error;
+	}
+
 	/* Start Display thread */
 	if (mfd->disp_thread == NULL) {
 		ret = mdss_fb_start_disp_thread(mfd);
@@ -1242,6 +1248,8 @@ static int mdss_fb_blank_unblank(struct msm_fb_data_type *mfd)
 		}
 		mutex_unlock(&mfd->bl_lock);
 	}
+
+	mdss_iommu_ctrl(0);
 
 error:
 	return ret;
