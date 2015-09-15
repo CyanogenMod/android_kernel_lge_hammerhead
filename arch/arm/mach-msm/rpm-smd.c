@@ -70,7 +70,7 @@ struct msm_rpm_driver_data {
 #define MAX_WAIT_ON_ACK 24
 #define INIT_ERROR 1
 
-static ATOMIC_NOTIFIER_HEAD(msm_rpm_sleep_notifier);
+static __refdata ATOMIC_NOTIFIER_HEAD(msm_rpm_sleep_notifier);
 static bool standalone;
 static int probe_status = -EPROBE_DEFER;
 static int msm_rpm_read_smd_data(char *buf);
@@ -391,7 +391,7 @@ int msm_rpm_smd_buffer_request(struct msm_rpm_request *cdata,
 		uint32_t size, gfp_t flag)
 {
 	struct slp_buf *slp;
-	static DEFINE_SPINLOCK(slp_buffer_lock);
+	static __refdata DEFINE_SPINLOCK(slp_buffer_lock);
 	unsigned long flags;
 	char *buf;
 	buf = cdata->buf;
@@ -1497,7 +1497,7 @@ fail:
 	return probe_status;
 }
 
-static struct of_device_id msm_rpm_match_table[] =  {
+static struct of_device_id msm_rpm_match_table[] __initdata =  {
 	{.compatible = "qcom,rpm-smd"},
 	{},
 };
