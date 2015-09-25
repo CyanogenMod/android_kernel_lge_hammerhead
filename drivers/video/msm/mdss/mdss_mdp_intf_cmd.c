@@ -666,7 +666,6 @@ static int mdss_mdp_cmd_panel_on(struct mdss_mdp_ctl *ctl,
 int mdss_mdp_cmd_kickoff(struct mdss_mdp_ctl *ctl, void *arg)
 {
 	struct mdss_mdp_cmd_ctx *ctx, *sctx = NULL;
-	unsigned long flags;
 
 	ctx = (struct mdss_mdp_cmd_ctx *) ctl->priv_data;
 	if (!ctx) {
@@ -693,11 +692,9 @@ int mdss_mdp_cmd_kickoff(struct mdss_mdp_ctl *ctl, void *arg)
 	MDSS_XLOG(ctl->num, ctl->roi.x, ctl->roi.y, ctl->roi.w,
 						ctl->roi.h);
 
-	spin_lock_irqsave(&ctx->koff_lock, flags);
 	atomic_inc(&ctx->koff_cnt);
 	if (sctx)
 		atomic_inc(&sctx->koff_cnt);
-	spin_unlock_irqrestore(&ctx->koff_lock, flags);
 
 	trace_mdp_cmd_kickoff(ctl->num, atomic_read(&ctx->koff_cnt));
 
@@ -821,9 +818,9 @@ int mdss_mdp_cmd_stop(struct mdss_mdp_ctl *ctl, int panel_power_state)
 	MDSS_XLOG(ctl->num, ctx->koff_cnt, ctx->clk_enabled,
 				ctx->rdptr_enabled, XLOG_FUNC_ENTRY);
 
-	spin_lock_irqsave(&ctx->clk_lock, flags);
 	/* intf stopped,  no more kickoff */
 	atomic_set(&ctx->intf_stopped, 1);
+	spin_lock_irqsave(&ctx->clk_lock, flags);
 	if (ctx->rdptr_enabled) {
 		INIT_COMPLETION(ctx->stop_comp);
 		need_wait = 1;
