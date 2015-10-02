@@ -1968,14 +1968,6 @@ struct afe_param_id_pseudo_port_cfg {
 	 */
 } __packed;
 
-#define AFE_PARAM_ID_DEVICE_HW_DELAY     0x00010243
-#define AFE_API_VERSION_DEVICE_HW_DELAY  0x1
-
-struct afe_param_id_device_hw_delay_cfg {
-	uint32_t    device_hw_delay_minor_version;
-	uint32_t    delay_in_us;
-} __packed;
-
 union afe_port_config {
 	struct afe_param_id_pcm_cfg               pcm;
 	struct afe_param_id_i2s_cfg               i2s;
@@ -1984,7 +1976,6 @@ union afe_port_config {
 	struct afe_param_id_rt_proxy_port_cfg     rtproxy;
 	struct afe_param_id_internal_bt_fm_cfg    int_bt_fm;
 	struct afe_param_id_pseudo_port_cfg       pseudo_port;
-	struct afe_param_id_device_hw_delay_cfg   hw_delay;
 } __packed;
 
 struct afe_audioif_config_command_no_payload {
@@ -2489,8 +2480,6 @@ struct asm_softvolume_params {
 #define ASM_MEDIA_FMT_MULTI_CHANNEL_PCM_V2 0x00010DA5
 
 #define ASM_STREAM_POSTPROC_TOPO_ID_DEFAULT 0x00010BE4
-
-#define ASM_STREAM_POSTPROC_TOPO_ID_NONE 0x00010C68
 
 #define ASM_MEDIA_FMT_EVRCB_FS 0x00010BEF
 
@@ -7154,11 +7143,6 @@ struct afe_port_cmd_set_aanc_acdb_table {
 
 /* Dolby DAP topology */
 #define DOLBY_ADM_COPP_TOPOLOGY_ID	0x0001033B
-
-/* RMS value from DSP */
-#define RMS_MODULEID_APPI_PASSTHRU  0x10009011
-#define RMS_PARAM_FIRST_SAMPLE 0x10009012
-#define RMS_PAYLOAD_LEN 4
 
 struct afe_svc_cmd_set_clip_bank_selection {
 	struct apr_hdr hdr;

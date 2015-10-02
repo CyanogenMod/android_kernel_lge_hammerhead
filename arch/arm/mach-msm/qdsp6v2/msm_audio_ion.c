@@ -48,16 +48,6 @@ int msm_audio_ion_alloc(const char *name, struct ion_client **client,
 {
 	int rc = 0;
 
-	if ((msm_audio_ion_data.smmu_enabled == true) &&
-	    (msm_audio_ion_data.group == NULL)) {
-		pr_debug("%s:probe is not done, deferred\n", __func__);
-		return -EPROBE_DEFER;
-	}
-	if (!name || !client || !handle || !paddr || !vaddr
-		|| !bufsz || !pa_len) {
-		pr_err("%s: Invalid params\n", __func__);
-		return -EINVAL;
-	}
 	*client = msm_audio_ion_client_create(UINT_MAX, name);
 	if (IS_ERR_OR_NULL((void *)(*client))) {
 		pr_err("%s: ION create client for AUDIO failed\n", __func__);
@@ -108,8 +98,6 @@ err_ion_handle:
 	ion_free(*client, *handle);
 err_ion_client:
 	msm_audio_ion_client_destroy(*client);
-	*handle = NULL;
-	*client = NULL;
 err:
 	return -EINVAL;
 }
@@ -120,16 +108,10 @@ int msm_audio_ion_import(const char *name, struct ion_client **client,
 			ion_phys_addr_t *paddr, size_t *pa_len, void **vaddr)
 {
 	int rc = 0;
-	if (!name || !client || !handle || !paddr || !vaddr || !pa_len) {
-		pr_err("%s: Invalid params\n", __func__);
-		rc = -EINVAL;
-		goto err;
-	}
 
 	*client = msm_audio_ion_client_create(UINT_MAX, name);
 	if (IS_ERR_OR_NULL((void *)(*client))) {
 		pr_err("%s: ION create client for AUDIO failed\n", __func__);
-		rc = -EINVAL;
 		goto err;
 	}
 
@@ -142,9 +124,8 @@ int msm_audio_ion_import(const char *name, struct ion_client **client,
 	if (IS_ERR_OR_NULL((void *) (*handle))) {
 		pr_err("%s: ion import dma buffer failed\n",
 				__func__);
-		rc = -EINVAL;
-		goto err_destroy_client;
-	}
+		goto err_ion_handle;
+		}
 
 	if (ionflag != NULL) {
 		rc = ion_handle_get_flags(*client, *handle, ionflag);
@@ -165,7 +146,6 @@ int msm_audio_ion_import(const char *name, struct ion_client **client,
 	*vaddr = ion_map_kernel(*client, *handle);
 	if (IS_ERR_OR_NULL((void *)*vaddr)) {
 		pr_err("%s: ION memory mapping for AUDIO failed\n", __func__);
-		rc = -ENOMEM;
 		goto err_ion_handle;
 	}
 	pr_debug("%s: mapped address = %p, size=%d\n", __func__, *vaddr, bufsz);
@@ -174,20 +154,13 @@ int msm_audio_ion_import(const char *name, struct ion_client **client,
 
 err_ion_handle:
 	ion_free(*client, *handle);
-err_destroy_client:
 	msm_audio_ion_client_destroy(*client);
-	*client = NULL;
-	*handle = NULL;
 err:
-	return rc;
+	return -EINVAL;
 }
 
 int msm_audio_ion_free(struct ion_client *client, struct ion_handle *handle)
 {
-	if (!client || !handle) {
-		pr_err("%s Invalid params\n", __func__);
-		return -EINVAL;
-	}
 	if (msm_audio_ion_data.smmu_enabled) {
 		/* Need to populate book kept infomation */
 		pr_debug("client=%p, domain=%p, domain_id=%d, group=%p",
@@ -269,7 +242,6 @@ int msm_audio_ion_mmap(struct audio_buffer *ab,
 	} else {
 		ion_phys_addr_t phys_addr;
 		size_t phys_len;
-		size_t va_len = 0;
 		pr_debug("%s: page is NULL\n", __func__);
 
 		ret = ion_phys(ab->client, ab->handle, &phys_addr, &phys_len);
@@ -283,12 +255,6 @@ int msm_audio_ion_mmap(struct audio_buffer *ab,
 			vma, (unsigned int)vma->vm_start,
 			(unsigned int)vma->vm_end, vma->vm_pgoff,
 			(unsigned long int)vma->vm_page_prot);
-		va_len = vma->vm_end - vma->vm_start;
-		if ((offset > phys_len) || (va_len > phys_len-offset)) {
-			pr_err("wrong offset size %ld, lens= %d, va_len=%d\n",
-				offset, phys_len, va_len);
-			return -EINVAL;
-		}
 		ret =  remap_pfn_range(vma, vma->vm_start,
 				__phys_to_pfn(phys_addr) + vma->vm_pgoff,
 				vma->vm_end - vma->vm_start,
@@ -328,11 +294,6 @@ int msm_audio_ion_import_legacy(const char *name, struct ion_client *client,
 			ion_phys_addr_t *paddr, size_t *pa_len, void **vaddr)
 {
 	int rc = 0;
-	if (!name || !client || !handle || !paddr || !vaddr || !pa_len) {
-		pr_err("%s: Invalid params\n", __func__);
-		rc = -EINVAL;
-		goto err;
-	}
 	/* client is already created for legacy and given*/
 	/* name should be audio_acdb_client or Audio_Dec_Client,
 	bufsz should be 0 and fd shouldn't be 0 as of now
@@ -343,16 +304,14 @@ int msm_audio_ion_import_legacy(const char *name, struct ion_client *client,
 	if (IS_ERR_OR_NULL((void *)(*handle))) {
 		pr_err("%s: ion import dma buffer failed\n",
 			__func__);
-		rc = -EINVAL;
-		goto err_destroy_client;
-	}
+		goto err_ion_handle;
+		}
 
 	if (ionflag != NULL) {
 		rc = ion_handle_get_flags(client, *handle, ionflag);
 		if (rc) {
 			pr_err("%s: could not get flags for the handle\n",
 							__func__);
-			rc = -EINVAL;
 			goto err_ion_handle;
 		}
 	}
@@ -361,7 +320,6 @@ int msm_audio_ion_import_legacy(const char *name, struct ion_client *client,
 	if (rc) {
 		pr_err("%s: ION Get Physical for AUDIO failed, rc = %d\n",
 			__func__, rc);
-		rc = -EINVAL;
 		goto err_ion_handle;
 	}
 
@@ -369,7 +327,6 @@ int msm_audio_ion_import_legacy(const char *name, struct ion_client *client,
 	*vaddr = ion_map_kernel(client, *handle);
 	if (IS_ERR_OR_NULL((void *)*vaddr)) {
 		pr_err("%s: ION memory mapping for AUDIO failed\n", __func__);
-		rc = -EINVAL;
 		goto err_ion_handle;
 	}
 
@@ -380,12 +337,8 @@ int msm_audio_ion_import_legacy(const char *name, struct ion_client *client,
 
 err_ion_handle:
 	ion_free(client, *handle);
-err_destroy_client:
-	msm_audio_ion_client_destroy(client);
-	client = NULL;
-	*handle = NULL;
-err:
-	return rc;
+	return -EINVAL;
+
 }
 
 int msm_audio_ion_free_legacy(struct ion_client *client,

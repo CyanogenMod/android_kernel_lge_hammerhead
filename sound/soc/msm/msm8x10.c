@@ -554,7 +554,7 @@ static struct snd_soc_dai_link msm8x10_dai[] = {
 		.name = "MSM8X10 Compr",
 		.stream_name = "COMPR",
 		.cpu_dai_name	= "MultiMedia4",
-		.platform_name  = "msm-compress-dsp",
+		.platform_name  = "msm-compr-dsp",
 		.dynamic = 1,
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
 			 SND_SOC_DPCM_TRIGGER_POST},
@@ -799,23 +799,15 @@ static __devinit int msm8x10_asoc_machine_probe(struct platform_device *pdev)
 		goto err;
 
 	ret = snd_soc_register_card(card);
-	if (ret == -EPROBE_DEFER)
-		goto err1;
-	else if (ret) {
+	if (ret) {
 		dev_err(&pdev->dev, "snd_soc_register_card failed (%d)\n",
 			ret);
-		goto err1;
+		goto err;
 	}
 
 	atomic_set(&aud_init_rsc_ref, 0);
 
 	return 0;
-err1:
-	mutex_destroy(&cdc_mclk_mutex);
-	if (pcbcr)
-		iounmap(pcbcr);
-	if (prcgr)
-		iounmap(prcgr);
 err:
 	return ret;
 }

@@ -18,6 +18,8 @@
 #include <linux/atomic.h>
 #include <linux/wait.h>
 
+#include <mach/qdsp6v2/rtac.h>
+
 #include <sound/apr_audio-v2.h>
 #include <mach/qdsp6v2/apr.h>
 #include <sound/q6adm-v2.h>
@@ -31,19 +33,15 @@
 
 #define RESET_COPP_ID 99
 #define INVALID_COPP_ID 0xFF
-/* Used for inband payload copy, max size is 4k */
-/* 2 is to account for module & param ID in payload */
-#define ADM_GET_PARAMETER_LENGTH  (4096 - APR_HDR_SIZE - 2 * sizeof(uint32_t))
+#define ADM_GET_PARAMETER_LENGTH 350
 
-#define ULL_SUPPORTED_SAMPLE_RATE 48000
-#define ULL_MAX_SUPPORTED_CHANNEL 2
+
 enum {
 	ADM_RX_AUDPROC_CAL,
 	ADM_TX_AUDPROC_CAL,
 	ADM_RX_AUDVOL_CAL,
 	ADM_TX_AUDVOL_CAL,
 	ADM_CUSTOM_TOP_CAL,
-	ADM_RTAC,
 	ADM_MAX_CAL_TYPES
 };
 
@@ -78,7 +76,7 @@ static struct adm_multi_ch_map multi_ch_map = { false,
 						{0, 0, 0, 0, 0, 0, 0, 0}
 					      };
 
-static int adm_get_parameters[ADM_GET_PARAMETER_LENGTH];
+static int adm_dolby_get_parameters[ADM_GET_PARAMETER_LENGTH];
 
 int srs_trumedia_open(int port_id, int srs_tech_id, void *srs_params)
 {
@@ -93,11 +91,6 @@ int srs_trumedia_open(int port_id, int srs_tech_id, void *srs_params)
 		sz = sizeof(struct adm_cmd_set_pp_params_inband_v5) +
 			sizeof(struct srs_trumedia_params_GLOBAL);
 		adm_params = kzalloc(sz, GFP_KERNEL);
-		if (!adm_params) {
-			pr_err("%s, adm params memory alloc failed\n",
-				__func__);
-			return -ENOMEM;
-		}
 		adm_params->payload_size =
 			sizeof(struct srs_trumedia_params_GLOBAL) +
 			sizeof(struct adm_param_data_v5);
@@ -122,11 +115,6 @@ int srs_trumedia_open(int port_id, int srs_tech_id, void *srs_params)
 		sz = sizeof(struct adm_cmd_set_pp_params_inband_v5) +
 			sizeof(struct srs_trumedia_params_WOWHD);
 		adm_params = kzalloc(sz, GFP_KERNEL);
-		if (!adm_params) {
-			pr_err("%s, adm params memory alloc failed\n",
-				__func__);
-			return -ENOMEM;
-		}
 		adm_params->payload_size =
 			sizeof(struct srs_trumedia_params_WOWHD) +
 			sizeof(struct adm_param_data_v5);
@@ -152,11 +140,6 @@ int srs_trumedia_open(int port_id, int srs_tech_id, void *srs_params)
 		sz = sizeof(struct adm_cmd_set_pp_params_inband_v5) +
 			sizeof(struct srs_trumedia_params_CSHP);
 		adm_params = kzalloc(sz, GFP_KERNEL);
-		if (!adm_params) {
-			pr_err("%s, adm params memory alloc failed\n",
-				__func__);
-			return -ENOMEM;
-		}
 		adm_params->payload_size =
 			sizeof(struct srs_trumedia_params_CSHP) +
 			sizeof(struct adm_param_data_v5);
@@ -181,11 +164,6 @@ int srs_trumedia_open(int port_id, int srs_tech_id, void *srs_params)
 		sz = sizeof(struct adm_cmd_set_pp_params_inband_v5) +
 			sizeof(struct srs_trumedia_params_HPF);
 		adm_params = kzalloc(sz, GFP_KERNEL);
-		if (!adm_params) {
-			pr_err("%s, adm params memory alloc failed\n",
-				__func__);
-			return -ENOMEM;
-		}
 		adm_params->payload_size =
 			sizeof(struct srs_trumedia_params_HPF) +
 			sizeof(struct adm_param_data_v5);
@@ -206,11 +184,6 @@ int srs_trumedia_open(int port_id, int srs_tech_id, void *srs_params)
 		sz = sizeof(struct adm_cmd_set_pp_params_inband_v5) +
 			sizeof(struct srs_trumedia_params_PEQ);
 		adm_params = kzalloc(sz, GFP_KERNEL);
-		if (!adm_params) {
-			pr_err("%s, adm params memory alloc failed\n",
-				__func__);
-			return -ENOMEM;
-		}
 		adm_params->payload_size =
 				sizeof(struct srs_trumedia_params_PEQ) +
 				sizeof(struct adm_param_data_v5);
@@ -233,11 +206,6 @@ int srs_trumedia_open(int port_id, int srs_tech_id, void *srs_params)
 		sz = sizeof(struct adm_cmd_set_pp_params_inband_v5) +
 			sizeof(struct srs_trumedia_params_HL);
 		adm_params = kzalloc(sz, GFP_KERNEL);
-		if (!adm_params) {
-			pr_err("%s, adm params memory alloc failed\n",
-				__func__);
-			return -ENOMEM;
-		}
 		adm_params->payload_size =
 			sizeof(struct srs_trumedia_params_HL) +
 			sizeof(struct adm_param_data_v5);
@@ -372,10 +340,10 @@ dolby_dap_send_param_return:
 	return rc;
 }
 
-int adm_get_params(int port_id, uint32_t module_id, uint32_t param_id,
-		uint32_t params_length, char *params)
+int adm_dolby_dap_get_params(int port_id, uint32_t module_id, uint32_t param_id,
+				uint32_t params_length, char *params)
 {
-	struct adm_cmd_get_pp_params_v5 *adm_params = NULL;
+	struct adm_cmd_get_pp_params_v5	*adm_params = NULL;
 	int sz, rc = 0, i = 0, index = afe_get_port_index(port_id);
 	int *params_data = (int *)params;
 
@@ -384,17 +352,17 @@ int adm_get_params(int port_id, uint32_t module_id, uint32_t param_id,
 			__func__, index, port_id);
 		return -EINVAL;
 	}
-	sz = sizeof(struct adm_cmd_get_pp_params_v5) + params_length;
+	sz = sizeof(struct adm_cmd_set_pp_params_v5) + params_length;
 	adm_params = kzalloc(sz, GFP_KERNEL);
 	if (!adm_params) {
 		pr_err("%s, adm params memory alloc failed", __func__);
 		return -ENOMEM;
 	}
 
-	memcpy(((u8 *)adm_params + sizeof(struct adm_cmd_get_pp_params_v5)),
-		params, params_length);
+	memcpy(((u8 *)adm_params + sizeof(struct adm_cmd_set_pp_params_v5)),
+			params, params_length);
 	adm_params->hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
-	APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
+				APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
 	adm_params->hdr.pkt_size = sz;
 	adm_params->hdr.src_svc = APR_SVC_ADM;
 	adm_params->hdr.src_domain = APR_DOMAIN_APPS;
@@ -415,32 +383,30 @@ int adm_get_params(int port_id, uint32_t module_id, uint32_t param_id,
 	atomic_set(&this_adm.copp_stat[index], 0);
 	rc = apr_send_pkt(this_adm.apr, (uint32_t *)adm_params);
 	if (rc < 0) {
-		pr_err("%s: Failed to Get Params on port %d\n", __func__,
+		pr_err("%s: Failed to Get DOLBY Params on port %d\n", __func__,
 			port_id);
 		rc = -EINVAL;
-		goto adm_get_param_return;
+		goto dolby_dap_get_param_return;
 	}
 	/* Wait for the callback with copp id */
 	rc = wait_event_timeout(this_adm.wait[index],
-	atomic_read(&this_adm.copp_stat[index]),
-		msecs_to_jiffies(TIMEOUT_MS));
+			atomic_read(&this_adm.copp_stat[index]),
+			msecs_to_jiffies(TIMEOUT_MS));
 	if (!rc) {
-		pr_err("%s: get params timed out port = %d\n", __func__,
+		pr_err("%s: DOLBY get params timed out port = %d\n", __func__,
 			port_id);
 		rc = -EINVAL;
-		goto adm_get_param_return;
+		goto dolby_dap_get_param_return;
 	}
 	if (params_data) {
-		for (i = 0; i < adm_get_parameters[0]; i++)
-			params_data[i] = adm_get_parameters[1+i];
+		for (i = 0; i < adm_dolby_get_parameters[0]; i++)
+			params_data[i] = adm_dolby_get_parameters[1+i];
 	}
 	rc = 0;
-adm_get_param_return:
+dolby_dap_get_param_return:
 	kfree(adm_params);
-
 	return rc;
 }
-
 
 static void adm_callback_debug_print(struct apr_client_data *data)
 {
@@ -501,10 +467,6 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 			this_adm.apr = NULL;
 			reset_custom_topology_flags();
 			this_adm.set_custom_topology = 1;
-			for (i = 0; i < ADM_MAX_CAL_TYPES; i++)
-				atomic_set(&this_adm.mem_map_cal_handles[i],
-					0);
-			rtac_clear_mapping(ADM_RTAC_CAL);
 		}
 		pr_debug("Resetting calibration blocks");
 		for (i = 0; i < MAX_AUDPROC_TYPES; i++) {
@@ -618,18 +580,13 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 			if (payload[0] != 0)
 				pr_err("%s: ADM_CMDRSP_GET_PP_PARAMS_V5 returned error = 0x%x\n",
 					__func__, payload[0]);
-			if (rtac_make_adm_callback(payload,
-					data->payload_size))
-				break;
-
-			if (data->payload_size > (4 * sizeof(uint32_t))) {
-				adm_get_parameters[0] = payload[3];
-				pr_debug("GET_PP PARAM:received parameter length: %x\n",
-						adm_get_parameters[0]);
-				/* storing param size then params */
-				for (i = 0; i < payload[3]; i++)
-					adm_get_parameters[1+i] = payload[4+i];
-			}
+			rtac_make_adm_callback(payload,
+				data->payload_size);
+			adm_dolby_get_parameters[0] = payload[3];
+			pr_debug("GET_PP PARAM:received parameter length: %x\n",
+					adm_dolby_get_parameters[0]);
+			for (i = 0; i < payload[3]; i++)
+				adm_dolby_get_parameters[1+i] = payload[4+i];
 			atomic_set(&this_adm.copp_stat[index], 1);
 			wake_up(&this_adm.wait[index]);
 			break;
@@ -809,15 +766,11 @@ static void send_adm_cal(int port_id, int path, int perf_mode)
 	int			result = 0;
 	s32			acdb_path;
 	struct acdb_cal_block	aud_cal;
-	int			size;
+	int			size = 4096;
 	pr_debug("%s\n", __func__);
 
 	/* Maps audio_dev_ctrl path definition to ACDB definition */
 	acdb_path = path - 1;
-	if (acdb_path == TX_CAL)
-		size = 4096 * 4;
-	else
-		size = 4096;
 
 	pr_debug("%s: Sending audproc cal\n", __func__);
 	get_audproc_cal(acdb_path, &aud_cal);
@@ -888,92 +841,6 @@ static void send_adm_cal(int port_id, int path, int perf_mode)
 			__func__, port_id, acdb_path);
 }
 
-int adm_map_rtac_block(struct rtac_cal_block_data *cal_block)
-{
-	int	result = 0;
-	pr_debug("%s\n", __func__);
-
-	if (cal_block == NULL) {
-		pr_err("%s: cal_block is NULL!\n",
-			__func__);
-		result = -EINVAL;
-		goto done;
-	}
-
-	if (cal_block->cal_data.paddr == 0) {
-		pr_debug("%s: No address to map!\n",
-			__func__);
-		result = -EINVAL;
-		goto done;
-	}
-
-	if (cal_block->map_data.map_size == 0) {
-		pr_debug("%s: map size is 0!\n",
-			__func__);
-		result = -EINVAL;
-		goto done;
-	}
-
-	/* valid port ID needed for callback use primary I2S */
-	atomic_set(&this_adm.mem_map_cal_index, ADM_RTAC);
-	result = adm_memory_map_regions(PRIMARY_I2S_RX,
-			&cal_block->cal_data.paddr, 0,
-			&cal_block->map_data.map_size, 1);
-	if (result < 0) {
-		pr_err("%s: RTAC mmap did not work! addr = 0x%x, size = %d\n",
-			__func__, cal_block->cal_data.paddr,
-			cal_block->map_data.map_size);
-		goto done;
-	}
-
-	cal_block->map_data.map_handle = atomic_read(
-		&this_adm.mem_map_cal_handles[ADM_RTAC]);
-done:
-	return result;
-}
-
-int adm_unmap_rtac_block(uint32_t *mem_map_handle)
-{
-	int	result = 0;
-	pr_debug("%s\n", __func__);
-
-	if (mem_map_handle == NULL) {
-		pr_debug("%s: Map handle is NULL, nothing to unmap\n",
-			__func__);
-		goto done;
-	}
-
-	if (*mem_map_handle == 0) {
-		pr_debug("%s: Map handle is 0, nothing to unmap\n",
-			__func__);
-		goto done;
-	}
-
-	if (*mem_map_handle != atomic_read(
-			&this_adm.mem_map_cal_handles[ADM_RTAC])) {
-		pr_err("%s: Map handles do not match! Unmapping RTAC, RTAC map 0x%x, ADM map 0x%x\n",
-			__func__, *mem_map_handle, atomic_read(
-			&this_adm.mem_map_cal_handles[ADM_RTAC]));
-
-		/* if mismatch use handle passed in to unmap */
-		atomic_set(&this_adm.mem_map_cal_handles[ADM_RTAC],
-			   *mem_map_handle);
-	}
-
-	/* valid port ID needed for callback use primary I2S */
-	atomic_set(&this_adm.mem_map_cal_index, ADM_RTAC);
-	result = adm_memory_unmap_regions(PRIMARY_I2S_RX);
-	if (result < 0) {
-		pr_debug("%s: adm_memory_unmap_regions failed, error %d\n",
-			__func__, result);
-	} else {
-		atomic_set(&this_adm.mem_map_cal_handles[ADM_RTAC], 0);
-		*mem_map_handle = 0;
-	}
-done:
-	return result;
-}
-
 int adm_unmap_cal_blocks(void)
 {
 	int				i;
@@ -994,8 +861,6 @@ int adm_unmap_cal_blocks(void)
 					= 0;
 			} else if (i == ADM_CUSTOM_TOP_CAL) {
 				this_adm.set_custom_topology = 1;
-			} else {
-				continue;
 			}
 
 			atomic_set(&this_adm.mem_map_cal_index, i);
@@ -1156,15 +1021,8 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 			(open.topology_id == VPM_TX_DM_FLUENCE_COPP_TOPOLOGY))
 				rate = 16000;
 
-		if (perf_mode) {
-			open.topology_id = NULL_COPP_TOPOLOGY;
-			rate = ULL_SUPPORTED_SAMPLE_RATE;
-			if(channel_mode > ULL_MAX_SUPPORTED_CHANNEL)
-				channel_mode = ULL_MAX_SUPPORTED_CHANNEL;
-		}
 		open.dev_num_channel = channel_mode & 0x00FF;
 		open.bit_width = bits_per_sample;
-		WARN_ON(perf_mode && (rate != 48000));
 		open.sample_rate  = rate;
 		memset(open.dev_channel_mapping, 0, 8);
 
@@ -1175,8 +1033,8 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 			open.dev_channel_mapping[1] = PCM_CHANNEL_FR;
 		} else if (channel_mode == 3)	{
 			open.dev_channel_mapping[0] = PCM_CHANNEL_FL;
-			open.dev_channel_mapping[1] = PCM_CHANNEL_FR;
-			open.dev_channel_mapping[2] = PCM_CHANNEL_FC;
+			open.dev_channel_mapping[0] = PCM_CHANNEL_FR;
+			open.dev_channel_mapping[1] = PCM_CHANNEL_FC;
 		} else if (channel_mode == 4) {
 			open.dev_channel_mapping[0] = PCM_CHANNEL_FL;
 			open.dev_channel_mapping[1] = PCM_CHANNEL_FR;

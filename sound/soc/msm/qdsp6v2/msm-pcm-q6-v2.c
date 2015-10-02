@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -30,17 +30,12 @@
 #include <linux/msm_audio_ion.h>
 
 #include <linux/of_device.h>
-#include <sound/tlv.h>
 #include <sound/pcm_params.h>
 
 #include "msm-pcm-q6-v2.h"
 #include "msm-pcm-routing-v2.h"
 
 static struct audio_locks the_locks;
-
-#define PCM_MASTER_VOL_MAX_STEPS	0x2000
-static const DECLARE_TLV_DB_LINEAR(msm_pcm_vol_gain, 0,
-				PCM_MASTER_VOL_MAX_STEPS);
 
 struct snd_msm {
 	struct snd_card *card;
@@ -62,8 +57,7 @@ static struct snd_pcm_hardware msm_pcm_hardware_capture = {
 				SNDRV_PCM_INFO_MMAP_VALID |
 				SNDRV_PCM_INFO_INTERLEAVED |
 				SNDRV_PCM_INFO_PAUSE | SNDRV_PCM_INFO_RESUME),
-	.formats =              (SNDRV_PCM_FMTBIT_S16_LE |
-				SNDRV_PCM_FMTBIT_S24_LE),
+	.formats =              SNDRV_PCM_FMTBIT_S16_LE,
 	.rates =                SNDRV_PCM_RATE_8000_48000,
 	.rate_min =             8000,
 	.rate_max =             48000,
@@ -103,7 +97,7 @@ static struct snd_pcm_hardware msm_pcm_hardware_playback = {
 /* Conventional and unconventional sample rate supported */
 static unsigned int supported_sample_rates[] = {
 	8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000,
-	88200, 96000, 176400, 192000
+	96000, 192000
 };
 
 static uint32_t in_frame_info[CAPTURE_MAX_NUM_PERIODS][2];
@@ -260,8 +254,6 @@ static int msm_pcm_capture_prepare(struct snd_pcm_substream *substream)
 	struct msm_audio *prtd = runtime->private_data;
 	int ret = 0;
 	int i = 0;
-	uint16_t bits_per_sample = 16;
-
 	pr_debug("%s\n", __func__);
 	prtd->pcm_size = snd_pcm_lib_buffer_bytes(substream);
 	prtd->pcm_count = snd_pcm_lib_period_bytes(substream);
@@ -274,19 +266,10 @@ static int msm_pcm_capture_prepare(struct snd_pcm_substream *substream)
 	if (prtd->enabled)
 		return 0;
 
-	switch (runtime->format) {
-	case SNDRV_PCM_FORMAT_S16_LE:
-		bits_per_sample = 16;
-		break;
-	case SNDRV_PCM_FORMAT_S24_LE:
-		bits_per_sample = 24;
-		break;
-	}
 	pr_debug("Samp_rate = %d\n", prtd->samp_rate);
 	pr_debug("Channel = %d\n", prtd->channel_mode);
-	ret = q6asm_enc_cfg_blk_pcm_format_support(prtd->audio_client,
-					prtd->samp_rate, prtd->channel_mode,
-					bits_per_sample);
+	ret = q6asm_enc_cfg_blk_pcm(prtd->audio_client, prtd->samp_rate,
+					prtd->channel_mode);
 	if (ret < 0)
 		pr_debug("%s: cmd cfg pcm was block failed", __func__);
 
@@ -401,18 +384,6 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 									ret);
 		}
 	}
-	ret = snd_pcm_hw_constraint_step(runtime, 0,
-		SNDRV_PCM_HW_PARAM_PERIOD_BYTES, 32);
-	if (ret < 0) {
-		pr_err("constraint for period bytes step ret = %d\n",
-								ret);
-	}
-	ret = snd_pcm_hw_constraint_step(runtime, 0,
-		SNDRV_PCM_HW_PARAM_BUFFER_BYTES, 32);
-	if (ret < 0) {
-		pr_err("constraint for buffer bytes step ret = %d\n",
-								ret);
-	}
 
 	prtd->dsp_cnt = 0;
 	prtd->set_channel_map = false;
@@ -452,7 +423,10 @@ static int msm_pcm_playback_copy(struct snd_pcm_substream *substream, int a,
 
 	data = q6asm_is_cpu_buf_avail(IN, prtd->audio_client, &size, &idx);
 	if (size < fbytes) {
-		fbytes = size;
+		pr_err("%s: size mismatch error size %d fbytes %d\n",
+		__func__ , size , fbytes);
+		ret = -EFAULT;
+		goto fail;
 	}
 	bufptr = data;
 	if (bufptr) {
@@ -725,13 +699,10 @@ static int msm_pcm_hw_params(struct snd_pcm_substream *substream,
 
 	/* Capture Path */
 	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
-		if (params_format(params) == SNDRV_PCM_FORMAT_S24_LE)
-			bits_per_sample = 24;
 
 		pr_debug("%s Opening %d-ch PCM read stream\n",
 			__func__, params_channels(params));
-		ret = q6asm_open_read_v2(prtd->audio_client, FORMAT_LINEAR_PCM,
-				bits_per_sample);
+		ret = q6asm_open_read(prtd->audio_client, FORMAT_LINEAR_PCM);
 		if (ret < 0) {
 			pr_err("%s: q6asm_open_read failed\n", __func__);
 			q6asm_audio_client_free(prtd->audio_client);
@@ -785,94 +756,6 @@ static struct snd_pcm_ops msm_pcm_ops = {
 	.pointer        = msm_pcm_pointer,
 	.mmap		= msm_pcm_mmap,
 };
-
-static int msm_pcm_set_volume(struct msm_audio *prtd, uint32_t volume)
-{
-	int rc = 0;
-
-	if (prtd && prtd->audio_client) {
-		pr_debug("%s: channels %d volume 0x%x\n", __func__,
-				prtd->channel_mode, volume);
-		rc = q6asm_set_volume(prtd->audio_client, volume);
-		if (rc < 0) {
-			pr_err("%s: Send Volume command failed rc=%d\n",
-					__func__, rc);
-		}
-	}
-	return rc;
-}
-
-static int msm_pcm_volume_ctl_get(struct snd_kcontrol *kcontrol,
-		      struct snd_ctl_elem_value *ucontrol)
-{
-	struct snd_pcm_volume *vol = snd_kcontrol_chip(kcontrol);
-	struct snd_pcm_substream *substream =
-		vol->pcm->streams[SNDRV_PCM_STREAM_PLAYBACK].substream;
-	struct msm_audio *prtd;
-
-	pr_debug("%s\n", __func__);
-	if (!substream) {
-		pr_err("%s substream not found\n", __func__);
-		return -ENODEV;
-	}
-	if (!substream->runtime) {
-		pr_err("%s substream runtime not found\n", __func__);
-		return 0;
-	}
-	prtd = substream->runtime->private_data;
-	if (prtd)
-		ucontrol->value.integer.value[0] = prtd->volume;
-	return 0;
-}
-
-static int msm_pcm_volume_ctl_put(struct snd_kcontrol *kcontrol,
-				struct snd_ctl_elem_value *ucontrol)
-{
-	int rc = 0;
-	struct snd_pcm_volume *vol = snd_kcontrol_chip(kcontrol);
-	struct snd_pcm_substream *substream =
-		vol->pcm->streams[SNDRV_PCM_STREAM_PLAYBACK].substream;
-	struct msm_audio *prtd;
-	int volume = ucontrol->value.integer.value[0];
-
-	pr_debug("%s: volume : 0x%x\n", __func__, volume);
-	if (!substream) {
-		pr_err("%s substream not found\n", __func__);
-		return -ENODEV;
-	}
-	if (!substream->runtime) {
-		pr_err("%s substream runtime not found\n", __func__);
-		return 0;
-	}
-	prtd = substream->runtime->private_data;
-	if (prtd) {
-		rc = msm_pcm_set_volume(prtd, volume);
-		prtd->volume = volume;
-	}
-	return rc;
-}
-
-static int msm_pcm_add_volume_control(struct snd_soc_pcm_runtime *rtd)
-{
-	int ret = 0;
-	struct snd_pcm *pcm = rtd->pcm;
-	struct snd_pcm_volume *volume_info;
-	struct snd_kcontrol *kctl;
-
-	dev_dbg(rtd->dev, "%s, Volume control add\n", __func__);
-	ret = snd_pcm_add_volume_ctls(pcm, SNDRV_PCM_STREAM_PLAYBACK,
-			NULL, 1, rtd->dai_link->be_id,
-			&volume_info);
-	if (ret < 0) {
-		pr_err("%s volume control failed ret %d\n", __func__, ret);
-		return ret;
-	}
-	kctl = volume_info->kctl;
-	kctl->put = msm_pcm_volume_ctl_put;
-	kctl->get = msm_pcm_volume_ctl_get;
-	kctl->tlv.p = msm_pcm_vol_gain;
-	return 0;
-}
 
 static int msm_pcm_chmap_ctl_put(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
@@ -960,10 +843,6 @@ static int msm_asoc_pcm_new(struct snd_soc_pcm_runtime *rtd)
 		__func__, kctl->id.name);
 	kctl->put = msm_pcm_chmap_ctl_put;
 	kctl->get = msm_pcm_chmap_ctl_get;
-	ret = msm_pcm_add_volume_control(rtd);
-	if (ret)
-		pr_err("%s: Could not add pcm Volume Control %d\n",
-			__func__, ret);
 	return ret;
 }
 
@@ -979,9 +858,9 @@ static __devinit int msm_pcm_probe(struct platform_device *pdev)
 	struct msm_plat_data *pdata;
 
 	rc = of_property_read_u32(pdev->dev.of_node,
-				"qti,msm-pcm-dsp-id", &id);
+				"qcom,msm-pcm-dsp-id", &id);
 	if (rc) {
-		dev_err(&pdev->dev, "%s: qti,msm-pcm-dsp-id missing in DT node\n",
+		dev_err(&pdev->dev, "%s: qcom,msm-pcm-dsp-id missing in DT node\n",
 					__func__);
 		return rc;
 	}
@@ -993,7 +872,7 @@ static __devinit int msm_pcm_probe(struct platform_device *pdev)
 	}
 
 	if (of_property_read_bool(pdev->dev.of_node,
-				"qti,msm-pcm-low-latency"))
+				"qcom,msm-pcm-low-latency"))
 		pdata->perf_mode = 1;
 	else
 		pdata->perf_mode = 0;
@@ -1018,7 +897,7 @@ static int msm_pcm_remove(struct platform_device *pdev)
 	return 0;
 }
 static const struct of_device_id msm_pcm_dt_match[] = {
-	{.compatible = "qti,msm-pcm-dsp"},
+	{.compatible = "qcom,msm-pcm-dsp"},
 	{}
 };
 MODULE_DEVICE_TABLE(of, msm_pcm_dt_match);

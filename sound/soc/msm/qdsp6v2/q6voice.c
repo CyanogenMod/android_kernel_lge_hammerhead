@@ -19,6 +19,7 @@
 #include <linux/msm_audio_ion.h>
 
 #include <asm/mach-types.h>
+#include <mach/qdsp6v2/rtac.h>
 #include <mach/socinfo.h>
 #include <mach/qdsp6v2/apr_tal.h>
 
@@ -44,7 +45,6 @@ enum {
 	VOC_TOKEN_NONE,
 	VOIP_MEM_MAP_TOKEN,
 	VOC_CAL_MEM_MAP_TOKEN,
-	VOC_RTAC_MEM_MAP_TOKEN
 };
 
 static struct common_data common;
@@ -88,7 +88,6 @@ static int voice_send_set_pp_enable_cmd(struct voice_data *v,
 static int is_cal_memory_allocated(void);
 static int is_voip_memory_allocated(void);
 static int voice_alloc_cal_mem_map_table(void);
-static int voice_alloc_rtac_mem_map_table(void);
 static int voice_alloc_oob_shared_mem(void);
 static int voice_free_oob_shared_mem(void);
 static int voice_alloc_oob_mem_table(void);
@@ -1349,63 +1348,6 @@ static int is_cal_memory_allocated(void)
 	return ret;
 }
 
-
-static int free_cal_map_table(void)
-{
-	int ret = 0;
-
-	if ((common.cal_mem_map_table.client == NULL) ||
-		(common.cal_mem_map_table.handle == NULL))
-		goto done;
-
-	ret = msm_audio_ion_free(common.cal_mem_map_table.client,
-		common.cal_mem_map_table.handle);
-	if (ret < 0) {
-		pr_err("%s: msm_audio_ion_free failed:\n", __func__);
-		ret = -EPERM;
-	}
-
-done:
-	common.cal_mem_map_table.client = NULL;
-	common.cal_mem_map_table.handle = NULL;
-	return ret;
-}
-
-static int is_rtac_memory_allocated(void)
-{
-	bool ret;
-
-	if (common.rtac_mem_map_table.client != NULL &&
-	    common.rtac_mem_map_table.handle != NULL)
-		ret = true;
-	else
-		ret = false;
-
-	return ret;
-}
-
-static int free_rtac_map_table(void)
-{
-	int ret = 0;
-
-	if ((common.rtac_mem_map_table.client == NULL) ||
-		(common.rtac_mem_map_table.handle == NULL))
-		goto done;
-
-	ret = msm_audio_ion_free(common.rtac_mem_map_table.client,
-		common.rtac_mem_map_table.handle);
-	if (ret < 0) {
-		pr_err("%s: msm_audio_ion_free failed:\n", __func__);
-		ret = -EPERM;
-	}
-
-done:
-	common.rtac_mem_map_table.client = NULL;
-	common.rtac_mem_map_table.handle = NULL;
-	return ret;
-}
-
-
 static int is_voip_memory_allocated(void)
 {
 	bool ret;
@@ -1488,8 +1430,7 @@ static int voice_config_cvs_vocoder(struct voice_data *v)
 	switch (common.mvs_info.media_type) {
 	case VSS_MEDIA_ID_EVRC_MODEM:
 	case VSS_MEDIA_ID_4GV_NB_MODEM:
-	case VSS_MEDIA_ID_4GV_WB_MODEM:
-	case VSS_MEDIA_ID_4GV_NW_MODEM: {
+	case VSS_MEDIA_ID_4GV_WB_MODEM: {
 		struct cvs_set_cdma_enc_minmax_rate_cmd cvs_set_cdma_rate;
 
 		pr_debug("Setting EVRC min-max rate\n");
@@ -1506,10 +1447,8 @@ static int voice_config_cvs_vocoder(struct voice_data *v)
 		cvs_set_cdma_rate.hdr.token = 0;
 		cvs_set_cdma_rate.hdr.opcode =
 				VSS_ISTREAM_CMD_CDMA_SET_ENC_MINMAX_RATE;
-		cvs_set_cdma_rate.cdma_rate.min_rate =
-				common.mvs_info.evrc_min_rate;
-		cvs_set_cdma_rate.cdma_rate.max_rate =
-				common.mvs_info.evrc_max_rate;
+		cvs_set_cdma_rate.cdma_rate.min_rate = common.mvs_info.rate;
+		cvs_set_cdma_rate.cdma_rate.max_rate = common.mvs_info.rate;
 
 		v->cvs_state = CMD_STATUS_FAIL;
 
@@ -2528,7 +2467,6 @@ int voice_unmap_cal_blocks(void)
 				__func__, v->session_id);
 
 			common.cal_mem_handle = 0;
-			free_cal_map_table();
 		}
 		mutex_unlock(&v->lock);
 	}
@@ -2672,117 +2610,6 @@ static int voice_mem_map_cal_block(struct voice_data *v)
 done:
 	mutex_unlock(&common.common_lock);
 	return ret;
-}
-
-int voc_map_rtac_block(struct rtac_cal_block_data *cal_block)
-{
-	int			result = 0;
-	struct voice_data	*v = NULL;
-
-	pr_debug("%s\n", __func__);
-
-	if (cal_block == NULL) {
-		pr_err("%s: cal_block is NULL!\n",
-			__func__);
-
-		result = -EINVAL;
-		goto done;
-	}
-
-	if (cal_block->cal_data.paddr == 0) {
-		pr_debug("%s: No address to map!\n",
-			__func__);
-
-		result = -EINVAL;
-		goto done;
-	}
-
-	if (cal_block->map_data.map_size == 0) {
-		pr_debug("%s: map size is 0!\n",
-			__func__);
-
-		result = -EINVAL;
-		goto done;
-	}
-
-	mutex_lock(&common.common_lock);
-	/* use first session */
-	v = &common.voice[0];
-	mutex_lock(&v->lock);
-
-	if (!is_rtac_memory_allocated()) {
-		result = voice_alloc_rtac_mem_map_table();
-		if (result < 0) {
-			pr_err("%s: RTAC alloc mem map table did not work! addr = 0x%x, size = %d\n",
-				__func__, cal_block->cal_data.paddr,
-				cal_block->map_data.map_size);
-
-			goto err;
-		}
-	}
-
-	result = voice_map_memory_physical_cmd(v,
-		&common.rtac_mem_map_table,
-		(dma_addr_t)cal_block->cal_data.paddr,
-		cal_block->map_data.map_size,
-		VOC_RTAC_MEM_MAP_TOKEN);
-	if (result < 0) {
-		pr_err("%s: RTAC mmap did not work! addr = 0x%x, size = %d\n",
-			__func__, cal_block->cal_data.paddr,
-			cal_block->map_data.map_size);
-
-		free_rtac_map_table();
-		goto err;
-	}
-
-	cal_block->map_data.map_handle = common.rtac_mem_handle;
-err:
-	mutex_unlock(&v->lock);
-	mutex_unlock(&common.common_lock);
-done:
-	return result;
-}
-
-int voc_unmap_rtac_block(uint32_t *mem_map_handle)
-{
-	int			result = 0;
-	struct voice_data	*v = NULL;
-
-	pr_debug("%s\n", __func__);
-
-	if (mem_map_handle == NULL) {
-		pr_debug("%s: Map handle is NULL, nothing to unmap\n",
-			__func__);
-
-		goto done;
-	}
-
-	if (*mem_map_handle == 0) {
-		pr_debug("%s: Map handle is 0, nothing to unmap\n",
-			__func__);
-
-		goto done;
-	}
-
-	mutex_lock(&common.common_lock);
-	/* use first session */
-	v = &common.voice[0];
-	mutex_lock(&v->lock);
-
-	result = voice_send_mvm_unmap_memory_physical_cmd(
-			v, *mem_map_handle);
-	if (result) {
-		pr_err("%s: voice_send_mvm_unmap_memory_physical_cmd Failed for session 0x%x!\n",
-			__func__, v->session_id);
-	} else {
-		*mem_map_handle = 0;
-		common.rtac_mem_handle = 0;
-		free_rtac_map_table();
-	}
-	mutex_unlock(&v->lock);
-	mutex_unlock(&common.common_lock);
-done:
-	return result;
 }
 
 static int voice_setup_vocproc(struct voice_data *v)
@@ -4734,18 +4561,14 @@ void voc_register_dtmf_rx_detection_cb(dtmf_rx_det_cb_fn dtmf_rx_ul_cb,
 }
 
 void voc_config_vocoder(uint32_t media_type,
-			uint32_t rate,
-			uint32_t network_type,
-			uint32_t dtx_mode,
-			uint32_t evrc_min_rate,
-			uint32_t evrc_max_rate)
+			  uint32_t rate,
+			  uint32_t network_type,
+			  uint32_t dtx_mode)
 {
 	common.mvs_info.media_type = media_type;
 	common.mvs_info.rate = rate;
 	common.mvs_info.network_type = network_type;
 	common.mvs_info.dtx_mode = dtx_mode;
-	common.mvs_info.evrc_min_rate = evrc_min_rate;
-	common.mvs_info.evrc_max_rate = evrc_max_rate;
 }
 
 static int32_t qdsp_mvm_callback(struct apr_client_data *data, void *priv)
@@ -4793,8 +4616,6 @@ static int32_t qdsp_mvm_callback(struct apr_client_data *data, void *priv)
 
 			/* clean up memory handle */
 			c->cal_mem_handle = 0;
-			c->rtac_mem_handle = 0;
-			rtac_clear_mapping(VOICE_RTAC_CAL);
 
 			/* Sub-system restart is applicable to all sessions. */
 			for (i = 0; i < MAX_VOC_SESSIONS; i++) {
@@ -4881,18 +4702,6 @@ static int32_t qdsp_mvm_callback(struct apr_client_data *data, void *priv)
 
 				pr_debug("%s: cal mem handle 0x%x\n",
 					 __func__, c->cal_mem_handle);
-
-				v->mvm_state = CMD_STATUS_SUCCESS;
-				wake_up(&v->mvm_wait);
-			}
-		} else if (data->payload_size &&
-				data->token == VOC_RTAC_MEM_MAP_TOKEN) {
-			ptr = data->payload;
-			if (ptr[0]) {
-				c->rtac_mem_handle = ptr[0];
-
-				pr_debug("%s: cal mem handle 0x%x\n",
-					 __func__, c->rtac_mem_handle);
 
 				v->mvm_state = CMD_STATUS_SUCCESS;
 				wake_up(&v->mvm_wait);
@@ -5067,10 +4876,8 @@ static int32_t qdsp_cvs_callback(struct apr_client_data *data, void *priv)
 
 		cvs_voc_pkt = v->shmem_info.sh_buf.buf[1].data;
 		if (cvs_voc_pkt != NULL &&  common.mvs_info.ul_cb != NULL) {
-			/* cvs_voc_pkt[0] contains tx timestamp */
 			common.mvs_info.ul_cb((uint8_t *)&cvs_voc_pkt[3],
 					      cvs_voc_pkt[2],
-					      cvs_voc_pkt[0],
 					      common.mvs_info.private_data);
 		} else
 			pr_err("%s: cvs_voc_pkt or ul_cb is NULL\n", __func__);
@@ -5472,33 +5279,6 @@ static int voice_alloc_cal_mem_map_table(void)
 	pr_debug("%s: data 0x%x phys 0x%x\n", __func__,
 		 (unsigned int) common.cal_mem_map_table.data,
 		 common.cal_mem_map_table.phys);
-
-done:
-	return ret;
-}
-
-static int voice_alloc_rtac_mem_map_table(void)
-{
-	int ret = 0;
-	int len;
-
-	ret = msm_audio_ion_alloc("voc_rtac_cal",
-			&(common.rtac_mem_map_table.client),
-			&(common.rtac_mem_map_table.handle),
-			sizeof(struct vss_imemory_table_t),
-			(ion_phys_addr_t *)&common.rtac_mem_map_table.phys,
-			(size_t *) &len,
-			&(common.rtac_mem_map_table.data));
-	if (ret < 0) {
-		pr_err("%s: audio ION alloc failed, rc = %d\n",
-			__func__, ret);
-		goto done;
-	}
-
-	common.rtac_mem_map_table.size = sizeof(struct vss_imemory_table_t);
-	pr_debug("%s: data 0x%x phys 0x%x\n", __func__,
-		 (unsigned int) common.rtac_mem_map_table.data,
-		 common.rtac_mem_map_table.phys);
 
 done:
 	return ret;

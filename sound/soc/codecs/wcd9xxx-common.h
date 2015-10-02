@@ -35,47 +35,12 @@
 #define	WCD9XXX_CLSH_STATE_HPHL (0x01 << 1)
 #define	WCD9XXX_CLSH_STATE_HPHR (0x01 << 2)
 #define	WCD9XXX_CLSH_STATE_LO (0x01 << 3)
-#define NUM_CLSH_STATES (0x01 << 4)
-
-#define	WCD9XXX_CLSAB_STATE_IDLE  0x00
-#define WCD9XXX_CLSAB_STATE_HPHL (0x01 << 1)
-#define WCD9XXX_CLSAB_STATE_HPHR (0x01 << 2)
-
-#define WCD9XXX_CLSAB_REQ_ENABLE  true
-#define WCD9XXX_CLSAB_REQ_DISABLE false
+#define NUM_CLSH_STATES ((0x01 << 4) - 1)
 
 /* Derived State: Bits 1 and 2 should be set for Headphone stereo */
 #define WCD9XXX_CLSH_STATE_HPH_ST (WCD9XXX_CLSH_STATE_HPHL | \
 						WCD9XXX_CLSH_STATE_HPHR)
 
-#define WCD9XXX_CLSH_STATE_HPHL_EAR (WCD9XXX_CLSH_STATE_HPHL | \
-						WCD9XXX_CLSH_STATE_EAR)
-#define WCD9XXX_CLSH_STATE_HPHR_EAR (WCD9XXX_CLSH_STATE_HPHR | \
-						WCD9XXX_CLSH_STATE_EAR)
-
-#define WCD9XXX_CLSH_STATE_HPH_ST_EAR (WCD9XXX_CLSH_STATE_HPH_ST | \
-						WCD9XXX_CLSH_STATE_EAR)
-
-#define WCD9XXX_CLSH_STATE_HPHL_LO (WCD9XXX_CLSH_STATE_HPHL | \
-						WCD9XXX_CLSH_STATE_LO)
-#define WCD9XXX_CLSH_STATE_HPHR_LO (WCD9XXX_CLSH_STATE_HPHR | \
-						WCD9XXX_CLSH_STATE_LO)
-
-#define WCD9XXX_CLSH_STATE_HPH_ST_LO (WCD9XXX_CLSH_STATE_HPH_ST | \
-						WCD9XXX_CLSH_STATE_LO)
-
-#define WCD9XXX_CLSH_STATE_EAR_LO (WCD9XXX_CLSH_STATE_EAR | \
-						WCD9XXX_CLSH_STATE_LO)
-
-#define WCD9XXX_CLSH_STATE_HPHL_EAR_LO (WCD9XXX_CLSH_STATE_HPHL | \
-						WCD9XXX_CLSH_STATE_EAR | \
-						WCD9XXX_CLSH_STATE_LO)
-#define WCD9XXX_CLSH_STATE_HPHR_EAR_LO (WCD9XXX_CLSH_STATE_HPHR | \
-						WCD9XXX_CLSH_STATE_EAR | \
-						WCD9XXX_CLSH_STATE_LO)
-#define WCD9XXX_CLSH_STATE_HPH_ST_EAR_LO (WCD9XXX_CLSH_STATE_HPH_ST | \
-						WCD9XXX_CLSH_STATE_EAR | \
-						WCD9XXX_CLSH_STATE_LO)
 
 struct wcd9xxx_reg_mask_val {
 	u16	reg;
@@ -83,20 +48,10 @@ struct wcd9xxx_reg_mask_val {
 	u8	val;
 };
 
-enum ncp_fclk_level {
-	NCP_FCLK_LEVEL_8,
-	NCP_FCLK_LEVEL_5,
-	NCP_FCLK_LEVEL_MAX,
-};
-
 /* Class H data that the codec driver will maintain */
 struct wcd9xxx_clsh_cdc_data {
 	u8 state;
 	int buck_mv;
-	bool is_dynamic_vdd_cp;
-	int clsh_users;
-	int buck_users;
-	int ncp_users[NCP_FCLK_LEVEL_MAX];
 	struct wcd9xxx_resmgr *resmgr;
 };
 
@@ -114,10 +69,6 @@ enum wcd9xxx_buck_volt {
 extern void wcd9xxx_clsh_fsm(struct snd_soc_codec *codec,
 		struct wcd9xxx_clsh_cdc_data *cdc_clsh_d,
 		u8 req_state, bool req_type, u8 clsh_event);
-
-extern void wcd9xxx_enable_high_perf_mode(struct snd_soc_codec *codec,
-				struct wcd9xxx_clsh_cdc_data *clsh_d,
-				u8 req_state, bool req_type);
 
 extern void wcd9xxx_clsh_init(struct wcd9xxx_clsh_cdc_data *clsh,
 			      struct wcd9xxx_resmgr *resmgr);
