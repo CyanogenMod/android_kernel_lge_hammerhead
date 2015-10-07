@@ -18,6 +18,7 @@
 #include <linux/workqueue.h>
 #include <linux/kmod.h>
 #include <linux/wakelock.h>
+#include <linux/wakeup_reason.h>
 #include "power.h"
 
 /* 
@@ -36,6 +37,7 @@ static int try_to_freeze_tasks(bool user_only)
 	unsigned int elapsed_msecs;
 	bool wakeup = false;
 	int sleep_usecs = USEC_PER_MSEC;
+	char suspend_abort[MAX_SUSPEND_ABORT_LEN];
 
 	do_gettimeofday(&start);
 
@@ -76,6 +78,11 @@ static int try_to_freeze_tasks(bool user_only)
 			break;
 
 		if (pm_wakeup_pending()) {
+#ifndef CONFIG_UML
+			pm_get_active_wakeup_sources(suspend_abort,
+				MAX_SUSPEND_ABORT_LEN);
+#endif
+			log_suspend_abort_reason(suspend_abort);
 			wakeup = true;
 			break;
 		}
@@ -95,23 +102,24 @@ static int try_to_freeze_tasks(bool user_only)
 	do_div(elapsed_msecs64, NSEC_PER_MSEC);
 	elapsed_msecs = elapsed_msecs64;
 
-	if (todo) {
+	if (wakeup) {
 		printk("\n");
-		printk(KERN_ERR "Freezing of tasks %s after %d.%03d seconds "
-		       "(%d tasks refusing to freeze, wq_busy=%d):\n",
-		       wakeup ? "aborted" : "failed",
+		printk(KERN_ERR "Freezing of tasks aborted after %d.%03d seconds",
+		       elapsed_msecs / 1000, elapsed_msecs % 1000);
+	} else if (todo) {
+		printk("\n");
+		printk(KERN_ERR "Freezing of tasks failed after %d.%03d seconds"
+		       " (%d tasks refusing to freeze, wq_busy=%d):\n",
 		       elapsed_msecs / 1000, elapsed_msecs % 1000,
 		       todo - wq_busy, wq_busy);
 
-		if (!wakeup) {
-			read_lock(&tasklist_lock);
-			do_each_thread(g, p) {
-				if (p != current && !freezer_should_skip(p)
-				    && freezing(p) && !frozen(p))
-					sched_show_task(p);
-			} while_each_thread(g, p);
-			read_unlock(&tasklist_lock);
-		}
+		read_lock(&tasklist_lock);
+		do_each_thread(g, p) {
+			if (p != current && !freezer_should_skip(p)
+			    && freezing(p) && !frozen(p))
+				sched_show_task(p);
+		} while_each_thread(g, p);
+		read_unlock(&tasklist_lock);
 	} else {
 		printk("(elapsed %d.%03d seconds) ", elapsed_msecs / 1000,
 			elapsed_msecs % 1000);

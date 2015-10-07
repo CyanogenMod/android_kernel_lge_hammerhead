@@ -36,7 +36,6 @@
 
 #include <mach/memory.h>
 #include <mach/debug_mm.h>
-#include <mach/qdsp6v2/rtac.h>
 
 #include <sound/apr_audio-v2.h>
 #include <sound/q6asm-v2.h>
@@ -478,6 +477,134 @@ mmap_fail:
 	return;
 }
 
+int q6asm_map_rtac_block(struct rtac_cal_block_data *cal_block)
+{
+	int			result = 0;
+	struct asm_buffer_node	*buf_node = NULL;
+	struct list_head	*ptr, *next;
+	pr_debug("%s\n", __func__);
+
+	if (cal_block == NULL) {
+		pr_err("%s: cal_block is NULL!\n",
+			__func__);
+		result = -EINVAL;
+		goto done;
+	}
+
+	if (cal_block->cal_data.paddr == 0) {
+		pr_debug("%s: No address to map!\n",
+			__func__);
+		result = -EINVAL;
+		goto done;
+	}
+
+	if (common_client.mmap_apr == NULL) {
+		common_client.mmap_apr = q6asm_mmap_apr_reg();
+		if (common_client.mmap_apr == NULL) {
+			pr_err("%s: q6asm_mmap_apr_reg failed\n",
+				__func__);
+			result = -EPERM;
+			goto done;
+		}
+	}
+
+	if (cal_block->map_data.map_size == 0) {
+		pr_debug("%s: map size is 0!\n",
+			__func__);
+		result = -EINVAL;
+		goto done;
+	}
+
+	/* Use second asm buf to map memory */
+	if (common_client.port[OUT].buf == NULL) {
+		pr_err("%s: common buf is NULL\n",
+			__func__);
+		result = -EINVAL;
+		goto done;
+	}
+
+	common_client.port[OUT].buf->phys = cal_block->cal_data.paddr;
+
+	result = q6asm_memory_map_regions(&common_client,
+			OUT, cal_block->map_data.map_size, 1, 1);
+	if (result < 0) {
+		pr_err("%s: mmap did not work! addr = 0x%x, size = %d\n",
+			__func__, cal_block->cal_data.paddr,
+			cal_block->map_data.map_size);
+		goto done;
+	}
+
+	list_for_each_safe(ptr, next,
+		&common_client.port[OUT].mem_map_handle) {
+		buf_node = list_entry(ptr, struct asm_buffer_node,
+					list);
+		if (buf_node->buf_addr_lsw == cal_block->cal_data.paddr) {
+			cal_block->map_data.map_handle =  buf_node->mmap_hdl;
+			break;
+		}
+	}
+
+	result = q6asm_mmap_apr_dereg();
+	if (result < 0) {
+		pr_err("%s: q6asm_mmap_apr_dereg failed, err %d\n",
+			__func__, result);
+	} else {
+		common_client.mmap_apr = NULL;
+	}
+done:
+	return result;
+}
+
+int q6asm_unmap_rtac_block(uint32_t *mem_map_handle)
+{
+	int	result = 0;
+	int	result2 = 0;
+	pr_debug("%s\n", __func__);
+
+	if (mem_map_handle == NULL) {
+		pr_debug("%s: Map handle is NULL, nothing to unmap\n",
+			__func__);
+		goto done;
+	}
+
+	if (*mem_map_handle == 0) {
+		pr_debug("%s: Map handle is 0, nothing to unmap\n",
+			__func__);
+		goto done;
+	}
+
+	if (common_client.mmap_apr == NULL) {
+		common_client.mmap_apr = q6asm_mmap_apr_reg();
+		if (common_client.mmap_apr == NULL) {
+			pr_err("%s: q6asm_mmap_apr_reg failed\n",
+				__func__);
+			result = -EPERM;
+			goto done;
+		}
+	}
+
+
+	result2 = q6asm_memory_unmap_regions(&common_client, OUT);
+	if (result2 < 0) {
+		pr_err("%s: unmap failed, err %d\n",
+			__func__, result2);
+		result = result2;
+	} else {
+		mem_map_handle = 0;
+	}
+
+	result2 = q6asm_mmap_apr_dereg();
+	if (result2 < 0) {
+		pr_err("%s: q6asm_mmap_apr_dereg failed, err %d\n",
+			__func__, result2);
+		result = result2;
+	} else {
+		common_client.mmap_apr = NULL;
+	}
+done:
+	return result;
+}
+
 int q6asm_unmap_cal_blocks(void)
 {
 	int				result = 0;
@@ -535,6 +662,8 @@ int q6asm_audio_client_buf_free(unsigned int dir,
 			if (port->buf[cnt].data) {
 				msm_audio_ion_free(port->buf[cnt].client,
 						   port->buf[cnt].handle);
+				port->buf[cnt].client = NULL;
+				port->buf[cnt].handle = NULL;
 				port->buf[cnt].data = NULL;
 				port->buf[cnt].phys = 0;
 				--(port->max_buf_cnt);
@@ -571,7 +700,6 @@ int q6asm_audio_client_buf_free_contiguous(unsigned int dir,
 	}
 
 	if (port->buf[0].data) {
-		msm_audio_ion_free(port->buf[0].client, port->buf[0].handle);
 		pr_debug("%s:data[%p]phys[%p][%p] , client[%p] handle[%p]\n",
 			__func__,
 			(void *)port->buf[0].data,
@@ -579,6 +707,9 @@ int q6asm_audio_client_buf_free_contiguous(unsigned int dir,
 			(void *)&port->buf[0].phys,
 			(void *)port->buf[0].client,
 			(void *)port->buf[0].handle);
+		msm_audio_ion_free(port->buf[0].client, port->buf[0].handle);
+		port->buf[0].client = NULL;
+		port->buf[0].handle = NULL;
 	}
 
 	while (cnt >= 0) {
@@ -956,6 +1087,8 @@ static int32_t q6asm_srvc_callback(struct apr_client_data *data, void *priv)
 		this_mmap.apr = NULL;
 		reset_custom_topology_flags();
 		set_custom_topology = 1;
+		topology_map_handle = 0;
+		rtac_clear_mapping(ASM_RTAC_CAL);
 		return 0;
 	}
 	sid = (data->token >> 8) & 0x0F;
@@ -1092,8 +1225,6 @@ static int32_t q6asm_callback(struct apr_client_data *data, void *priv)
 					(uint32_t *)data->payload, ac->priv);
 		apr_reset(ac->apr);
 		ac->apr = NULL;
-		reset_custom_topology_flags();
-		set_custom_topology = 1;
 		return 0;
 	}
 

@@ -29,7 +29,7 @@
 #include <proto/bcmeth.h>
 #include <proto/bcmevent.h>
 
-#if WLC_E_LAST != 139
+#if WLC_E_LAST != 144
 #error "You need to add an entry to bcmevent_names[] for the new event"
 #endif
 
@@ -155,8 +155,29 @@ const bcmevent_name_t bcmevent_names[] = {
 	{ WLC_E_CCA_CHAN_QUAL, "CCA_BASED_CHANNEL_QUALITY" },
 #ifdef GSCAN_SUPPORT
 	{ WLC_E_PFN_GSCAN_FULL_RESULT, "PFN_GSCAN_FULL_RESULT"},
-	{ WLC_E_PFN_SWC, "PFN_SIGNIFICANT_WIFI_CHANGE"}
+	{ WLC_E_PFN_SWC, "PFN_SIGNIFICANT_WIFI_CHANGE"},
+	{ WLC_E_PFN_SSID_EXT, "PFN_SSID_EXT"},
+	{ WLC_E_ROAM_EXP_EVENT, "ROAM_EXP_EVENT"},
 #endif /* GSCAN_SUPPORT */
 };
 
 const int bcmevent_names_size = ARRAYSIZE(bcmevent_names);
+
+const char *bcmevent_get_name(uint event_type)
+{
+	const char *event_name = NULL;
+
+	uint idx;
+	for (idx = 0; idx < bcmevent_names_size; idx++) {
+
+		if (bcmevent_names[idx].event == event_type) {
+			event_name = bcmevent_names[idx].name;
+			break;
+		}
+	}
+
+	/* if we find an event name in the array, return it.
+	 * otherwise return unknown string.
+	 */
+	return ((event_name) ? event_name : "Unknown Event");
+}

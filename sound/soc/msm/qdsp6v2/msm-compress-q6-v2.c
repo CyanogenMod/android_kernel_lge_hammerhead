@@ -84,7 +84,7 @@ struct msm_compr_gapless_state {
 };
 
 static unsigned int supported_sample_rates[] = {
-	8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 96000, 192000
+	8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000
 };
 
 struct msm_compr_pdata {

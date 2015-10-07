@@ -346,7 +346,32 @@ typedef struct dhd_pub {
 	tcp_ack_info_t tcp_ack_info_tbl[MAXTCPSTREAMS];
 #endif /* DHDTCPACK_SUPPRESS */
 	uint32 arp_version;
+#ifdef GSCAN_SUPPORT
+	bool lazy_roam_enable;
+#endif /* GSCAN_SUPPORT */
 } dhd_pub_t;
+
+typedef struct {
+	uint rxwake;
+	uint rcwake;
+#ifdef DHD_WAKE_RX_STATUS
+	uint rx_bcast;
+	uint rx_arp;
+	uint rx_mcast;
+	uint rx_multi_ipv6;
+	uint rx_icmpv6;
+	uint rx_icmpv6_ra;
+	uint rx_icmpv6_na;
+	uint rx_icmpv6_ns;
+	uint rx_multi_ipv4;
+	uint rx_multi_other;
+	uint rx_ucast;
+#endif
+#ifdef DHD_WAKE_EVENT_STATUS
+	uint rc_event[WLC_E_LAST];
+#endif
+} wake_counts_t;
+
 typedef struct dhd_cmn {
 	osl_t *osh;		/* OSL handle */
 	dhd_pub_t *dhd;
@@ -524,7 +549,8 @@ extern void dhd_store_conn_status(uint32 event, uint32 status, uint32 reason);
 extern bool dhd_prec_enq(dhd_pub_t *dhdp, struct pktq *q, void *pkt, int prec);
 
 /* Receive frame for delivery to OS.  Callee disposes of rxp. */
-extern void dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *rxp, int numpkt, uint8 chan);
+extern void dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *rxp, int numpkt,
+	uint8 chan, int pkt_wake, wake_counts_t *wcp);
 
 /* Return pointer to interface name */
 extern char *dhd_ifname(dhd_pub_t *dhdp, int idx);
@@ -551,11 +577,25 @@ extern void dhd_txcomplete(dhd_pub_t *dhdp, void *txp, bool success);
 #define WIFI_FEATURE_TDLS_OFFCHANNEL    0x2000      /* Support for TDLS off channel     */
 #define WIFI_FEATURE_EPR                0x4000      /* Enhanced power reporting         */
 #define WIFI_FEATURE_AP_STA             0x8000      /* Support for AP STA Concurrency   */
+#define WIFI_FEATURE_LINKSTAT           0x10000     /* Support for Linkstats            */
+#define WIFI_FEATURE_HAL_EPNO           0x40000     /* WiFi PNO enhanced                */
 
 #define MAX_FEATURE_SET_CONCURRRENT_GROUPS  3
 
 extern int dhd_dev_get_feature_set(struct net_device *dev);
 extern int *dhd_dev_get_feature_set_matrix(struct net_device *dev, int *num);
+
+#ifdef GSCAN_SUPPORT
+extern int dhd_dev_set_lazy_roam_cfg(struct net_device *dev,
+             wlc_roam_exp_params_t *roam_param);
+extern int dhd_dev_lazy_roam_enable(struct net_device *dev, uint32 enable);
+extern int dhd_dev_set_lazy_roam_bssid_pref(struct net_device *dev,
+       wl_bssid_pref_cfg_t *bssid_pref, uint32 flush);
+extern int dhd_dev_set_blacklist_bssid(struct net_device *dev, maclist_t *blacklist,
+    uint32 len, uint32 flush);
+extern int dhd_dev_set_whitelist_ssid(struct net_device *dev, wl_ssid_whitelist_t *whitelist,
+    uint32 len, uint32 flush);
+#endif /* GSCAN_SUPPORT */
 
 /* OS independent layer functions */
 extern int dhd_os_proto_block(dhd_pub_t * pub);
@@ -787,7 +827,7 @@ extern uint dhd_force_tx_queueing;
 #define CUSTOM_LISTEN_INTERVAL 		LISTEN_INTERVAL
 #endif /* CUSTOM_LISTEN_INTERVAL */
 
-#define DEFAULT_SUSPEND_BCN_LI_DTIM		3
+#define DEFAULT_SUSPEND_BCN_LI_DTIM		5
 #ifndef CUSTOM_SUSPEND_BCN_LI_DTIM
 #define CUSTOM_SUSPEND_BCN_LI_DTIM		DEFAULT_SUSPEND_BCN_LI_DTIM
 #endif
@@ -815,7 +855,9 @@ extern uint dhd_force_tx_queueing;
 
 
 #define MAX_DTIM_SKIP_BEACON_INTERVAL	100 /* max allowed associated AP beacon for DTIM skip */
-#define MAX_DTIM_ALLOWED_INTERVAL 600 /* max allowed total beacon interval for DTIM skip */
+#ifndef MAX_DTIM_ALLOWED_INTERVAL
+#define MAX_DTIM_ALLOWED_INTERVAL 900 /* max allowed total beacon interval for DTIM skip */
+#endif
 #define NO_DTIM_SKIP 1
 #ifdef SDTEST
 /* Echo packet generator (SDIO), pkts/s */
