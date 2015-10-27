@@ -249,6 +249,7 @@ enum BinderDriverReturnProtocol {
 	 * The the last transaction (either a bcTRANSACTION or
 	 * a bcATTEMPT_ACQUIRE) failed (e.g. out of memory).  No parameters.
 	 */
+	BR_SUICIDE_COMPLETE = _IO('r', 18),
 };
 
 enum BinderDriverCommandProtocol {
@@ -323,6 +324,10 @@ enum BinderDriverCommandProtocol {
 	BC_DEAD_BINDER_DONE = _IOW('c', 16, void *),
 	/*
 	 * void *: cookie
+	 */
+	BC_DIE_BINDER = _IOW('c', 17, void *), // flat_binder_object maybe better?
+	/*
+	 * void *: ptr to binder
 	 */
 };
 
