@@ -262,7 +262,7 @@ static int boost_mig_sync_thread(void *data)
 			continue;
 		}
 
-		if (sync_threshold)
+		if (sync_threshold && src_policy.cur <= sync_threshold)
 			req_freq = min(sync_threshold, req_freq);
 
 		cancel_delayed_work_sync(&s->boost_rem);
