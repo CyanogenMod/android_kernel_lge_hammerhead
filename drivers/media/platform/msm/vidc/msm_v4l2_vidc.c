@@ -20,7 +20,6 @@
 #include <linux/debugfs.h>
 #include <linux/version.h>
 #include <linux/slab.h>
-#include <linux/pm_qos.h>
 #include <mach/board.h>
 #include <mach/iommu.h>
 #include <mach/iommu_domains.h>
@@ -34,7 +33,6 @@
 
 #define BASE_DEVICE_NUMBER 32
 
-static struct pm_qos_request msm_v4l2_vidc_pm_qos_request;
 struct msm_vidc_drv *vidc_driver;
 
 uint32_t msm_vidc_pwr_collapse_delay = 10000;
@@ -61,10 +59,10 @@ static int msm_v4l2_open(struct file *filp)
 		return -ENOMEM;
 	}
 
-	if (!pm_qos_request_active(&msm_v4l2_vidc_pm_qos_request)) {
-		dprintk(VIDC_DBG, "pm_qos_add with latency 1000usec\n");
-		pm_qos_add_request(&msm_v4l2_vidc_pm_qos_request,
-				PM_QOS_CPU_DMA_LATENCY, 1000);
+	if (!pm_qos_request_active(&vidc_inst->pm_qos)) {
+		dprintk(VIDC_DBG, "pm_qos_add with latency 332usec\n");
+		pm_qos_add_request(&vidc_inst->pm_qos,
+				PM_QOS_CPU_DMA_LATENCY, 332);
 	}
 
 	clear_bit(V4L2_FL_USES_V4L2_FH, &vdev->flags);
@@ -83,14 +81,14 @@ static int msm_v4l2_close(struct file *filp)
 		dprintk(VIDC_WARN,
 			"Failed in %s for release output buffers\n", __func__);
 
-	rc = msm_vidc_close(vidc_inst);
-
-	if (pm_qos_request_active(&msm_v4l2_vidc_pm_qos_request)) {
+	if (pm_qos_request_active(&vidc_inst->pm_qos)) {
 		dprintk(VIDC_DBG, "pm_qos_update and remove\n");
-		pm_qos_update_request(&msm_v4l2_vidc_pm_qos_request,
+		pm_qos_update_request(&vidc_inst->pm_qos,
 				PM_QOS_DEFAULT_VALUE);
-		pm_qos_remove_request(&msm_v4l2_vidc_pm_qos_request);
+		pm_qos_remove_request(&vidc_inst->pm_qos);
 	}
+
+	rc = msm_vidc_close(vidc_inst);
 
 	return rc;
 }
