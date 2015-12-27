@@ -190,4 +190,4 @@ static int __init earjack_debugger_init(void)
 	return platform_driver_register(&earjack_debugger_driver);
 }
 
-arch_initcall(earjack_debugger_init);
+device_initcall(earjack_debugger_init);
