@@ -675,6 +675,7 @@ config TI_DRV2667
 config EARJACK_DEBUGGER
 	bool "Earjack UART debugger support"
 	depends on SERIAL_MSM_HSL
+	depends on SERIAL_MSM_HSL_CONSOLE
 	help
 	  Enables support for Earjack Debugger trigger. It controls
 	  uart console. uart console will be disabled if detected earjack
