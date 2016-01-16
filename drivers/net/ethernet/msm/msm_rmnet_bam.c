@@ -754,8 +754,6 @@ static void rmnet_setup(struct net_device *dev)
 	dev->needed_headroom = HEADROOM_FOR_BAM + HEADROOM_FOR_QOS ;
 	dev->needed_tailroom = TAILROOM;
 	random_ether_addr(dev->dev_addr);
-
-	dev->watchdog_timeo = 1000; /* 10 seconds? */
 }
 
 #ifdef CONFIG_MSM_RMNET_DEBUG
