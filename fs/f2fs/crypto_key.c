@@ -13,7 +13,7 @@
 #include <keys/user-type.h>
 #include <linux/random.h>
 #include <linux/scatterlist.h>
-#include <uapi/linux/keyctl.h>
+#include <linux/keyctl.h>
 #include <crypto/hash.h>
 #include <linux/f2fs_fs.h>
 
