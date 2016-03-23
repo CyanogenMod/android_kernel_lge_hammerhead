@@ -63,7 +63,7 @@ static int cmd_status(struct sock *sk, u16 index, u16 cmd, u8 status)
 	struct mgmt_hdr *hdr;
 	struct mgmt_ev_cmd_status *ev;
 
-	BT_DBG("sock %p, index %u, cmd %u, status %u", sk, index, cmd, status);
+	BT_DBG("sock %pK, index %u, cmd %u, status %u", sk, index, cmd, status);
 
 	skb = alloc_skb(sizeof(*hdr) + sizeof(*ev), GFP_ATOMIC);
 	if (!skb)
@@ -92,7 +92,7 @@ static int cmd_complete(struct sock *sk, u16 index, u16 cmd, void *rp,
 	struct mgmt_hdr *hdr;
 	struct mgmt_ev_cmd_complete *ev;
 
-	BT_DBG("sock %p", sk);
+	BT_DBG("sock %pK", sk);
 
 	skb = alloc_skb(sizeof(*hdr) + sizeof(*ev) + rp_len, GFP_ATOMIC);
 	if (!skb)
@@ -120,7 +120,7 @@ static int read_version(struct sock *sk)
 {
 	struct mgmt_rp_read_version rp;
 
-	BT_DBG("sock %p", sk);
+	BT_DBG("sock %pK", sk);
 
 	rp.version = MGMT_VERSION;
 	put_unaligned_le16(MGMT_REVISION, &rp.revision);
@@ -137,7 +137,7 @@ static int read_index_list(struct sock *sk)
 	u16 count;
 	int i, err;
 
-	BT_DBG("sock %p", sk);
+	BT_DBG("sock %pK", sk);
 
 	read_lock(&hci_dev_list_lock);
 
@@ -192,7 +192,7 @@ static int read_controller_info(struct sock *sk, u16 index)
 	struct mgmt_rp_read_info rp;
 	struct hci_dev *hdev;
 
-	BT_DBG("sock %p hci%u", sk, index);
+	BT_DBG("sock %pK hci%u", sk, index);
 
 	hdev = hci_dev_get(index);
 	if (!hdev)
@@ -242,7 +242,7 @@ static void mgmt_pending_free_worker(struct work_struct *work)
 	struct mgmt_pending_free_work *free_work =
 		container_of(work, struct mgmt_pending_free_work, work);
 
-	BT_DBG("sk %p", free_work->sk);
+	BT_DBG("sk %pK", free_work->sk);
 
 	sock_put(free_work->sk);
 	kfree(free_work);
@@ -253,7 +253,7 @@ static void mgmt_pending_free(struct pending_cmd *cmd)
 	struct mgmt_pending_free_work *free_work;
 	struct sock *sk = cmd->sk;
 
-	BT_DBG("opcode %d, sk %p", cmd->opcode, sk);
+	BT_DBG("opcode %d, sk %pK", cmd->opcode, sk);
 
 	kfree(cmd->param);
 	kfree(cmd);
@@ -1757,7 +1757,7 @@ static void pairing_connect_complete_cb(struct hci_conn *conn, u8 status)
 {
 	struct pending_cmd *cmd;
 
-	BT_DBG("conn: %p %u", conn, status);
+	BT_DBG("conn: %pK %u", conn, status);
 
 	cmd = find_pairing(conn);
 	if (!cmd) {

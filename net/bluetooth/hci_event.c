@@ -1073,7 +1073,7 @@ static inline void hci_cs_create_conn(struct hci_dev *hdev, __u8 status)
 
 	conn = hci_conn_hash_lookup_ba(hdev, ACL_LINK, &cp->bdaddr);
 
-	BT_DBG("%s bdaddr %s conn %p", hdev->name, batostr(&cp->bdaddr), conn);
+	BT_DBG("%s bdaddr %s conn %pK", hdev->name, batostr(&cp->bdaddr), conn);
 
 	if (status) {
 		if (conn && conn->state == BT_CONNECT) {
@@ -1407,7 +1407,7 @@ static void hci_cs_le_create_conn(struct hci_dev *hdev, __u8 status)
 
 	conn = hci_conn_hash_lookup_ba(hdev, LE_LINK, &cp->peer_addr);
 
-	BT_DBG("%s bdaddr %s conn %p", hdev->name, batostr(&cp->peer_addr),
+	BT_DBG("%s bdaddr %s conn %pK", hdev->name, batostr(&cp->peer_addr),
 		conn);
 
 	if (status) {
@@ -1449,7 +1449,7 @@ static void hci_cs_accept_logical_link(struct hci_dev *hdev, __u8 status)
 
 	chan = hci_chan_list_lookup_id(hdev, ap->phy_handle);
 
-	BT_DBG("%s chan %p", hdev->name, chan);
+	BT_DBG("%s chan %pK", hdev->name, chan);
 
 	if (status) {
 		if (chan && chan->state == BT_CONNECT) {
@@ -1478,7 +1478,7 @@ static void hci_cs_create_logical_link(struct hci_dev *hdev, __u8 status)
 
 	chan = hci_chan_list_lookup_id(hdev, cp->phy_handle);
 
-	BT_DBG("%s chan %p", hdev->name, chan);
+	BT_DBG("%s chan %pK", hdev->name, chan);
 
 	if (status) {
 		if (chan && chan->state == BT_CONNECT) {
@@ -2431,7 +2431,7 @@ static inline void hci_hardware_error_evt(struct hci_dev *hdev,
 {
 	struct hci_ev_hardware_error *ev = (void *) skb->data;
 
-	BT_ERR("hdev=%p, hw_err_code = %u", hdev, ev->hw_err_code);
+	BT_ERR("hdev=%pK, hw_err_code = %u", hdev, ev->hw_err_code);
 
 	if (hdev && hdev->dev_type == HCI_BREDR) {
 		hci_dev_lock_bh(hdev);
@@ -2570,7 +2570,7 @@ static inline void hci_num_comp_blocks_evt(struct hci_dev *hdev,
 				conn = chan->conn;
 		}
 		if (conn) {
-			BT_DBG("%s conn %p sent %d", hdev->name,
+			BT_DBG("%s conn %pK sent %d", hdev->name,
 				conn, conn->sent);
 
 			conn->sent -= block_count;
@@ -3014,7 +3014,7 @@ static inline void hci_extended_inquiry_result_evt(struct hci_dev *hdev, struct 
 
 static inline u8 hci_get_auth_req(struct hci_conn *conn)
 {
-	BT_DBG("%p", conn);
+	BT_DBG("%pK", conn);
 
 	/* If remote requests dedicated bonding follow that lead */
 	if (conn->remote_auth == 0x02 || conn->remote_auth == 0x03) {

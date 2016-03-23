@@ -91,7 +91,7 @@ void hci_send_to_sock(struct hci_dev *hdev, struct sk_buff *skb,
 	struct sock *sk;
 	struct hlist_node *node;
 
-	BT_DBG("hdev %p len %d", hdev, skb->len);
+	BT_DBG("hdev %pK len %d", hdev, skb->len);
 
 	read_lock(&hci_sk_list.lock);
 	sk_for_each(sk, node, &hci_sk_list.head) {
@@ -157,7 +157,7 @@ static int hci_sock_release(struct socket *sock)
 	struct sock *sk = sock->sk;
 	struct hci_dev *hdev;
 
-	BT_DBG("sock %p sk %p", sock, sk);
+	BT_DBG("sock %pK sk %pK", sock, sk);
 
 	if (!sk)
 		return 0;
@@ -380,7 +380,7 @@ static int hci_sock_bind(struct socket *sock, struct sockaddr *addr, int addr_le
 	struct hci_dev *hdev = NULL;
 	int len, err = 0;
 
-	BT_DBG("sock %p sk %p", sock, sk);
+	BT_DBG("sock %pK sk %pK", sock, sk);
 
 	if (!addr)
 		return -EINVAL;
@@ -430,7 +430,7 @@ static int hci_sock_getname(struct socket *sock, struct sockaddr *addr, int *add
 	struct sock *sk = sock->sk;
 	struct hci_dev *hdev = hci_pi(sk)->hdev;
 
-	BT_DBG("sock %p sk %p", sock, sk);
+	BT_DBG("sock %pK sk %pK", sock, sk);
 
 	if (!hdev)
 		return -EBADFD;
@@ -487,7 +487,7 @@ static int hci_sock_recvmsg(struct kiocb *iocb, struct socket *sock,
 	struct sk_buff *skb;
 	int copied, err;
 
-	BT_DBG("sock %p, sk %p", sock, sk);
+	BT_DBG("sock %pK, sk %pK", sock, sk);
 
 	if (flags & (MSG_OOB))
 		return -EOPNOTSUPP;
@@ -526,7 +526,7 @@ static int hci_sock_sendmsg(struct kiocb *iocb, struct socket *sock,
 	int reserve = 0;
 	int err;
 
-	BT_DBG("sock %p sk %p", sock, sk);
+	BT_DBG("sock %pK sk %pK", sock, sk);
 
 	if (msg->msg_flags & MSG_OOB)
 		return -EOPNOTSUPP;
@@ -628,7 +628,7 @@ static int hci_sock_setsockopt(struct socket *sock, int level, int optname, char
 	struct sock *sk = sock->sk;
 	int err = 0, opt = 0;
 
-	BT_DBG("sk %p, opt %d", sk, optname);
+	BT_DBG("sk %pK, opt %d", sk, optname);
 
 	lock_sock(sk);
 
@@ -782,7 +782,7 @@ static int hci_sock_create(struct net *net, struct socket *sock, int protocol,
 {
 	struct sock *sk;
 
-	BT_DBG("sock %p", sock);
+	BT_DBG("sock %pK", sock);
 
 	if (sock->type != SOCK_RAW)
 		return -ESOCKTNOSUPPORT;

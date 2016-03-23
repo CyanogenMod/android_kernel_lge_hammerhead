@@ -68,7 +68,7 @@ static int smp_e(struct crypto_blkcipher *tfm, const u8 *k, u8 *r)
 	unsigned char iv[128];
 
 	if (tfm == NULL) {
-		BT_ERR("tfm %p", tfm);
+		BT_ERR("tfm %pK", tfm);
 		return -EINVAL;
 	}
 
@@ -468,7 +468,7 @@ static u8 smp_cmd_pairing_req(struct l2cap_conn *conn, struct sk_buff *skb)
 	u8 auth = SMP_AUTH_NONE;
 	int ret;
 
-	BT_DBG("conn %p", conn);
+	BT_DBG("conn %pK", conn);
 
 	hcon->preq[0] = SMP_CMD_PAIRING_REQ;
 	memcpy(&hcon->preq[1], req, sizeof(*req));
@@ -516,7 +516,7 @@ static u8 smp_cmd_pairing_rsp(struct l2cap_conn *conn, struct sk_buff *skb)
 	u8 key_size, auth = SMP_AUTH_NONE;
 	int ret;
 
-	BT_DBG("conn %p", conn);
+	BT_DBG("conn %pK", conn);
 
 	skb_pull(skb, sizeof(*rsp));
 
@@ -562,7 +562,7 @@ static u8 smp_cmd_pairing_confirm(struct l2cap_conn *conn, struct sk_buff *skb)
 	struct hci_conn *hcon = conn->hcon;
 	int ret;
 
-	BT_DBG("conn %p %s", conn, conn->hcon->out ? "master" : "slave");
+	BT_DBG("conn %pK %s", conn, conn->hcon->out ? "master" : "slave");
 
 	memcpy(hcon->pcnf, skb->data, sizeof(hcon->pcnf));
 	skb_pull(skb, sizeof(hcon->pcnf));
@@ -608,7 +608,7 @@ static u8 smp_cmd_pairing_random(struct l2cap_conn *conn, struct sk_buff *skb)
 	if (ret)
 		return SMP_UNSPECIFIED;
 
-	BT_DBG("conn %p %s", conn, conn->hcon->out ? "master" : "slave");
+	BT_DBG("conn %pK %s", conn, conn->hcon->out ? "master" : "slave");
 
 	swap128(res, confirm);
 
@@ -696,7 +696,7 @@ static u8 smp_cmd_security_req(struct l2cap_conn *conn, struct sk_buff *skb)
 	struct smp_cmd_pairing cp;
 	struct link_key *key;
 
-	BT_DBG("conn %p", conn);
+	BT_DBG("conn %pK", conn);
 
 	if (test_bit(HCI_CONN_ENCRYPT_PEND, &hcon->pend))
 		return 0;
@@ -739,7 +739,7 @@ int smp_conn_security(struct l2cap_conn *conn, __u8 sec_level)
 	struct hci_conn *hcon = conn->hcon;
 	__u8 authreq;
 
-	BT_DBG("conn %p hcon %p %d req: %d",
+	BT_DBG("conn %pK hcon %pK %d req: %d",
 			conn, hcon, hcon->sec_level, sec_level);
 
 	if (IS_ERR(hcon->hdev->tfm))
@@ -804,7 +804,7 @@ static int smp_cmd_encrypt_info(struct l2cap_conn *conn, struct sk_buff *skb)
 
 	skb_pull(skb, sizeof(*rp));
 
-	BT_DBG("conn %p", conn);
+	BT_DBG("conn %pK", conn);
 
 	memset(rand, 0, sizeof(rand));
 
@@ -860,7 +860,7 @@ int smp_sig_channel(struct l2cap_conn *conn, struct sk_buff *skb)
 	if (IS_ERR(hcon->hdev->tfm)) {
 		err = PTR_ERR(hcon->hdev->tfm);
 		reason = SMP_PAIRING_NOTSUPP;
-		BT_ERR("SMP_PAIRING_NOTSUPP %p", hcon->hdev->tfm);
+		BT_ERR("SMP_PAIRING_NOTSUPP %pK", hcon->hdev->tfm);
 		goto done;
 	}
 
@@ -941,7 +941,7 @@ static int smp_distribute_keys(struct l2cap_conn *conn, __u8 force)
 	struct smp_cmd_pairing *req, *rsp;
 	__u8 *keydist;
 
-	BT_DBG("conn %p force %d", conn, force);
+	BT_DBG("conn %pK force %d", conn, force);
 
 	if (IS_ERR(hcon->hdev->tfm))
 		return PTR_ERR(hcon->hdev->tfm);
@@ -1062,7 +1062,7 @@ void smp_timeout(unsigned long arg)
 	struct l2cap_conn *conn = (void *) arg;
 	u8 reason = SMP_UNSPECIFIED;
 
-	BT_DBG("%p", conn);
+	BT_DBG("%pK", conn);
 
 	smp_send_cmd(conn, SMP_CMD_PAIRING_FAIL, sizeof(reason), &reason);
 	clear_bit(HCI_CONN_ENCRYPT_PEND, &conn->hcon->pend);
