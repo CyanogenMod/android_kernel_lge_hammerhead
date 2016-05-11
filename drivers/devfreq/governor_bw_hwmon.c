@@ -49,6 +49,7 @@ struct hwmon_node {
 	unsigned int hyst_trigger_count;
 	unsigned int hyst_length;
 	unsigned int idle_mbps;
+	unsigned int min_mbps;
 	unsigned int low_power_ceil_mbps;
 	unsigned int low_power_io_percent;
 	unsigned int low_power_delay;
@@ -174,10 +175,13 @@ static DEVICE_ATTR(__attr, 0644, show_list_##__attr, store_list_##__attr)
 #define MIN_MS	10U
 #define MAX_MS	500U
 
+static u32 bytes_per_beat;
+
 /* Returns MBps of read/writes for the sampling window. */
 static unsigned int bytes_to_mbps(long long bytes, unsigned int us)
 {
 	bytes *= USEC_PER_SEC;
+	bytes *= bytes_per_beat;
 	do_div(bytes, us);
 	bytes = DIV_ROUND_UP_ULL(bytes, SZ_1M);
 	return bytes;
@@ -189,7 +193,7 @@ static unsigned int mbps_to_bytes(unsigned long mbps, unsigned int ms,
 	mbps *= (100 + tolerance_percent) * ms;
 	mbps /= 100;
 	mbps = DIV_ROUND_UP(mbps, MSEC_PER_SEC);
-	mbps *= SZ_1M;
+	mbps = mult_frac(mbps, SZ_1M, bytes_per_beat);
 	return mbps;
 }
 
@@ -257,12 +261,11 @@ unsigned long to_mbps_zone(struct hwmon_node *node, unsigned long mbps)
 	return node->hw->df->max_freq;
 }
 
-#define MIN_MBPS	500UL
 #define HIST_PEAK_TOL	60
 static unsigned long get_bw_and_set_irq(struct hwmon_node *node,
 					unsigned long *freq, unsigned long *ab)
 {
-	unsigned long meas_mbps, thres, flags, req_mbps, adj_mbps;
+	unsigned long meas_mbps, thres, flags, req_mbps, adj_mbps, min_mbps;
 	unsigned long meas_mbps_zone;
 	unsigned long hist_lo_tol, hyst_lo_tol;
 	struct bw_hwmon *hw = node->hw;
@@ -272,6 +275,7 @@ static unsigned long get_bw_and_set_irq(struct hwmon_node *node,
 
 	req_mbps = meas_mbps = node->max_mbps;
 	node->max_mbps = 0;
+	min_mbps = (unsigned long)node->min_mbps;
 
 	hist_lo_tol = (node->hist_max_mbps * HIST_PEAK_TOL) / 100;
 	/* Remember historic peak in the past hist_mem decision windows. */
@@ -352,7 +356,7 @@ static unsigned long get_bw_and_set_irq(struct hwmon_node *node,
 	}
 
 	hyst_lo_tol = (node->hyst_mbps * HIST_PEAK_TOL) / 100;
-	if (meas_mbps > node->hyst_mbps && meas_mbps > MIN_MBPS) {
+	if (meas_mbps > node->hyst_mbps && meas_mbps > min_mbps) {
 		hyst_lo_tol = (meas_mbps * HIST_PEAK_TOL) / 100;
 		node->hyst_peak = 0;
 		node->hyst_trig_win = node->hyst_length;
@@ -363,7 +367,7 @@ static unsigned long get_bw_and_set_irq(struct hwmon_node *node,
 	 * Check node->max_mbps to avoid double counting peaks that cause
 	 * early termination of a window.
 	 */
-	if (meas_mbps >= hyst_lo_tol && meas_mbps > MIN_MBPS
+	if (meas_mbps >= hyst_lo_tol && meas_mbps > min_mbps
 	    && !node->max_mbps) {
 		node->hyst_peak++;
 		if (node->hyst_peak >= node->hyst_trigger_count
@@ -387,11 +391,11 @@ static unsigned long get_bw_and_set_irq(struct hwmon_node *node,
 	}
 
 	/* Stretch the short sample window size, if the traffic is too low */
-	if (meas_mbps < MIN_MBPS) {
-		node->up_wake_mbps = (max(MIN_MBPS, req_mbps)
+	if (meas_mbps < min_mbps) {
+		node->up_wake_mbps = (max(min_mbps, req_mbps)
 					* (100 + node->up_thres)) / 100;
 		node->down_wake_mbps = 0;
-		thres = mbps_to_bytes(max(MIN_MBPS, req_mbps / 2),
+		thres = mbps_to_bytes(max(min_mbps, req_mbps / 2),
 					node->sample_ms, 0);
 	} else {
 		/*
@@ -686,6 +690,7 @@ gov_attr(hist_memory, 0U, 90U);
 gov_attr(hyst_trigger_count, 0U, 90U);
 gov_attr(hyst_length, 0U, 90U);
 gov_attr(idle_mbps, 0U, 2000U);
+gov_attr(min_mbps, 0U, 2000U);
 gov_attr(low_power_ceil_mbps, 0U, 2500U);
 gov_attr(low_power_io_percent, 1U, 100U);
 gov_attr(low_power_delay, 1U, 60U);
@@ -706,6 +711,7 @@ static struct attribute *dev_attr[] = {
 	&dev_attr_hyst_trigger_count.attr,
 	&dev_attr_hyst_length.attr,
 	&dev_attr_idle_mbps.attr,
+	&dev_attr_min_mbps.attr,
 	&dev_attr_low_power_ceil_mbps.attr,
 	&dev_attr_low_power_io_percent.attr,
 	&dev_attr_low_power_delay.attr,
@@ -835,8 +841,12 @@ int register_bw_hwmon(struct device *dev, struct bw_hwmon *hwmon)
 	node->hyst_trigger_count = 3;
 	node->hyst_length = 10;
 	node->idle_mbps = 400;
+	node->min_mbps = 500;
 	node->mbps_zones[0] = 100000;
 	node->hw = hwmon;
+
+	bytes_per_beat = node->hw->get_bytes_per_beat ?
+					node->hw->get_bytes_per_beat() : 1;
 
 	mutex_lock(&list_lock);
 	list_add_tail(&node->list, &hwmon_list);

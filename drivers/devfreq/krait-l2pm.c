@@ -151,17 +151,6 @@ static void mon_bw_init(void)
 	set_l2_indirect_reg(L2PMnEVTYPER(WR_MON), 0xB);
 }
 
-/* Returns MBps of read/writes for the sampling window. */
-static unsigned int beats_to_mbps(long long beats, unsigned int us)
-{
-	beats *= USEC_PER_SEC;
-	beats *= bytes_per_beat;
-	do_div(beats, us);
-	beats = DIV_ROUND_UP_ULL(beats, SZ_1M);
-
-	return beats;
-}
-
 static unsigned int mbps_to_beats(unsigned long mbps, unsigned int ms,
 				  unsigned int tolerance_percent)
 {
@@ -172,23 +161,36 @@ static unsigned int mbps_to_beats(unsigned long mbps, unsigned int ms,
 	return mbps;
 }
 
-static unsigned long meas_bw_and_set_irq(struct bw_hwmon *hw,
-					 unsigned int tol, unsigned int us)
+static unsigned long get_bytes_and_clear(struct bw_hwmon *hw)
 {
-	unsigned long r_mbps, w_mbps;
-	u32 r_limit, w_limit;
-	unsigned int sample_ms = hw->df->profile->polling_ms;
+	unsigned long r_count, w_count;
 
 	mon_disable(RD_MON);
 	mon_disable(WR_MON);
 
-	r_mbps = mon_get_count(RD_MON, prev_r_start_val);
-	r_mbps = beats_to_mbps(r_mbps, us);
-	w_mbps = mon_get_count(WR_MON, prev_w_start_val);
-	w_mbps = beats_to_mbps(w_mbps, us);
+	r_count = mon_get_count(RD_MON, prev_r_start_val);
+	w_count = mon_get_count(WR_MON, prev_w_start_val);
 
-	r_limit = mbps_to_beats(r_mbps, sample_ms, tol);
-	w_limit = mbps_to_beats(w_mbps, sample_ms, tol);
+	mon_enable(RD_MON);
+	mon_enable(WR_MON);
+
+	return r_count + w_count;
+}
+
+static unsigned long set_thres(struct bw_hwmon *hw, unsigned long bytes)
+{
+	unsigned long r_count, w_count, t_count;
+	u32 r_limit, w_limit;
+
+	mon_disable(RD_MON);
+	mon_disable(WR_MON);
+
+	r_count = mon_get_count(RD_MON, prev_r_start_val);
+	w_count = mon_get_count(WR_MON, prev_w_start_val);
+
+	t_count = r_count + w_count;
+	r_limit = bytes * (r_count * 100 / t_count);
+	w_limit = bytes * (w_count * 100 / t_count);
 
 	prev_r_start_val = mon_set_limit(RD_MON, r_limit);
 	prev_w_start_val = mon_set_limit(WR_MON, w_limit);
@@ -196,19 +198,29 @@ static unsigned long meas_bw_and_set_irq(struct bw_hwmon *hw,
 	mon_enable(RD_MON);
 	mon_enable(WR_MON);
 
-	pr_debug("R/W = %ld/%ld\n", r_mbps, w_mbps);
+	return t_count;
+}
 
-	return r_mbps + w_mbps;
+static u32 get_bytes_per_beat(void)
+{
+	return bytes_per_beat;
 }
 
 static irqreturn_t bwmon_intr_handler(int irq, void *dev)
 {
-	if (mon_overflow(RD_MON) || mon_overflow(WR_MON)) {
-		update_bw_hwmon(dev);
-		return IRQ_HANDLED;
-	}
+	if (!mon_overflow(RD_MON) || !mon_overflow(WR_MON))
+		return IRQ_NONE;
 
-	return IRQ_NONE;
+	if (bw_hwmon_sample_end(dev) > 0)
+		return IRQ_WAKE_THREAD;
+
+	return IRQ_HANDLED;
+}
+
+static irqreturn_t bwmon_intr_thread(int irq, void *dev)
+{
+	update_bw_hwmon(dev);
+	return IRQ_HANDLED;
 }
 
 static int start_bw_hwmon(struct bw_hwmon *hw, unsigned long mbps)
@@ -216,7 +228,8 @@ static int start_bw_hwmon(struct bw_hwmon *hw, unsigned long mbps)
 	u32 limit;
 	int ret;
 
-	ret = request_threaded_irq(bw_irq, NULL, bwmon_intr_handler,
+	ret = request_threaded_irq(bw_irq, bwmon_intr_handler,
+				  bwmon_intr_thread,
 				  IRQF_ONESHOT | IRQF_SHARED,
 				  "bw_hwmon", hw);
 	if (ret) {
@@ -260,7 +273,9 @@ static struct devfreq_governor devfreq_gov_cpubw_hwmon = {
 static struct bw_hwmon cpubw_hwmon = {
 	.start_hwmon = &start_bw_hwmon,
 	.stop_hwmon = &stop_bw_hwmon,
-	.meas_bw_and_set_irq = &meas_bw_and_set_irq,
+	.get_bytes_and_clear = &get_bytes_and_clear,
+	.set_thres = &set_thres,
+	.get_bytes_per_beat = &get_bytes_per_beat,
 	.gov = &devfreq_gov_cpubw_hwmon,
 };
 
