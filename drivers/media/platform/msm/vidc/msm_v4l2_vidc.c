@@ -64,6 +64,21 @@ static int msm_v4l2_open(struct file *filp)
 	if (!pm_qos_request_active(&vidc_inst->pm_qos)) {
 		dprintk(VIDC_DBG, "pm_qos_add with latency %u usec\n",
 				pm_qos_latency_us);
+
+		/*
+		 * The default request type PM_QOS_REQ_ALL_CORES is
+		 * applicable to all CPU cores that are online and
+		 * would have a power impact when there are more
+		 * number of CPUs. PM_QOS_REQ_AFFINE_IRQ request
+		 * type shall update/apply the vote only to that CPU to
+		 * which IRQ's affinity is set to.
+		 */
+#ifdef CONFIG_SMP
+
+		vidc_inst->pm_qos.type = PM_QOS_REQ_AFFINE_IRQ;
+		vidc_inst->pm_qos.irq = core->resources.irq;
+
+#endif
 		pm_qos_add_request(&vidc_inst->pm_qos,
 				PM_QOS_CPU_DMA_LATENCY, pm_qos_latency_us);
 	}
