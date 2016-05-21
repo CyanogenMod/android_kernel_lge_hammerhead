@@ -46,3 +46,8 @@
 &mdss_dsi0 {
 	qcom,dsi-pref-prim-pan = <&dsi_jdi_command_ors>;
 };
+
+&sdhc_1 {
+	qcom,cpu-affinity = "all_cores";
+	qcom,cpu-dma-latency-us = <2 201 501>;
+};
