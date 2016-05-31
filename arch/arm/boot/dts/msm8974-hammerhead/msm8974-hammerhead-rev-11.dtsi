@@ -48,6 +48,6 @@
 };
 
 &sdhc_1 {
-	qcom,cpu-affinity = "all_cores";
+	qcom,cpu-affinity = "affine_irq";
 	qcom,cpu-dma-latency-us = <2 201 501>;
 };
