@@ -284,8 +284,7 @@ int sps_bam_enable(struct sps_bam *dev)
 			if (dev->props.options & SPS_BAM_RES_CONFIRM) {
 				result = request_irq(dev->props.irq,
 					(irq_handler_t) bam_isr,
-					IRQF_TRIGGER_RISING | IRQF_NO_SUSPEND,
-					"sps", dev);
+					IRQF_TRIGGER_RISING, "sps", dev);
 				SPS_DBG(
 					"sps:BAM %pa uses edge for IRQ# %d\n",
 					BAM_ID(dev), dev->props.irq);
