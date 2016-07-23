@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014, Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014, 2016, Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -615,7 +615,7 @@ int q6lsm_register_sound_model(struct lsm_client *client,
 	rmb();
 	cmd.mem_map_handle = client->sound_model.mem_map_handle;
 
-	pr_debug("%s: addr %pa, size %d, handle %x\n", __func__,
+	pr_debug("%s: addr %pK, size %d, handle 0x%x\n", __func__,
 		&client->sound_model.phys, cmd.model_size, cmd.mem_map_handle);
 	rc = q6lsm_apr_send_pkt(client, client->apr, &cmd, true, NULL);
 	if (rc)
@@ -683,7 +683,7 @@ static int q6lsm_memory_map_regions(struct lsm_client *client,
 	int rc;
 	int cmd_size = 0;
 
-	pr_debug("%s: dma_addr_p 0x%pa, dma_buf_sz %d, mmap_p 0x%p, session %d\n",
+	pr_debug("%s: dma_addr_p 0x%pK, dma_buf_sz %d, mmap_p 0x%pK, session %d\n",
 		__func__, &dma_addr_p, dma_buf_sz, mmap_p,
 		client->session);
 	if (CHECK_SESSION(client->session))

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Linux Foundation. All rights reserved.
+ * Copyright (c) 2013, 2016 Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -220,7 +220,7 @@ static int msm_lsm_ioctl_shared(struct snd_pcm_substream *substream,
 
 		if (copy_from_user(prtd->lsm_client->sound_model.data,
 				   snd_model.data, snd_model.data_size)) {
-			pr_err("%s: copy from user data failed data %p size %d\n",
+			pr_err("%s: copy from user data failed data %pK size %d\n",
 			       __func__, snd_model.data, snd_model.data_size);
 			rc = -EFAULT;
 			break;
