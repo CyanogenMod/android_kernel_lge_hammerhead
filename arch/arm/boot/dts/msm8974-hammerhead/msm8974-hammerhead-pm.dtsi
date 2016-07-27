@@ -419,3 +419,9 @@
 		status = "ok";
 	};
 };
+
+&pm8941_lsid0 {
+	qcom,pm8941_rtc {
+		qcom,qpnp-rtc-alarm-pwrup = <1>;
+	};
+};
