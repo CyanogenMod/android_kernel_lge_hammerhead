@@ -96,7 +96,7 @@ static int validate_session_pkt(struct list_head *sessions,
 		mutex_unlock(session_lock);
 	}
 	if (invalid)
-		dprintk(VIDC_WARN, "Invalid session from FW: %p\n", sess);
+		dprintk(VIDC_WARN, "Invalid session from FW: %pK\n", sess);
 	return invalid;
 }
 
@@ -987,7 +987,7 @@ static void hfi_process_session_ftb_done(
 		data_done.output_done.extra_data_buffer =
 			pkt->extra_data_buffer;
 		data_done.output_done.buffer_type = HAL_BUFFER_OUTPUT;
-		dprintk(VIDC_DBG, "FBD: Received buf: %p, of len: %d\n",
+		dprintk(VIDC_DBG, "FBD: Received buf: %pK, of len: %d\n",
 				   pkt->packet_buffer, pkt->filled_len);
 	} else if (is_decoder == 1) {
 		struct hfi_msg_session_fbd_uncompressed_plane0_packet *pkt =
@@ -1216,7 +1216,7 @@ static void hfi_process_session_get_seq_hdr_done(
 	data_done.status = hfi_map_err_status((u32)pkt->error_type);
 	data_done.output_done.packet_buffer1 = pkt->sequence_header;
 	data_done.output_done.filled_len1 = pkt->header_len;
-	dprintk(VIDC_INFO, "seq_hdr: %p, Length: %d",
+	dprintk(VIDC_INFO, "seq_hdr: %pK, Length: %d",
 		   pkt->sequence_header, pkt->header_len);
 	callback(SESSION_GET_SEQ_HDR_DONE, &data_done);
 }

@@ -1377,7 +1377,7 @@ static void handle_fbd(enum command_response cmd, void *data)
 
 		if (extra_idx && (extra_idx < VIDEO_MAX_PLANES)) {
 			dprintk(VIDC_DBG,
-			"extradata: userptr = %p;  bytesused = %d; length = %d\n",
+			"extradata: userptr = %pK;  bytesused = %d; length = %d\n",
 			(u8 *)vb->v4l2_planes[extra_idx].m.userptr,
 			vb->v4l2_planes[extra_idx].bytesused,
 			vb->v4l2_planes[extra_idx].length);
@@ -1525,13 +1525,13 @@ static int msm_comm_scale_clocks(struct msm_vidc_core *core)
 	struct hfi_device *hdev;
 
 	if (!core) {
-		dprintk(VIDC_ERR, "%s Invalid args: %p\n", __func__, core);
+		dprintk(VIDC_ERR, "%s Invalid args: %pK\n", __func__, core);
 		return -EINVAL;
 	}
 
 	hdev = core->device;
 	if (!hdev) {
-		dprintk(VIDC_ERR, "%s Invalid device handle: %p\n",
+		dprintk(VIDC_ERR, "%s Invalid device handle: %pK\n",
 			__func__, hdev);
 		return -EINVAL;
 	}

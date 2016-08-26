@@ -605,7 +605,7 @@ int unmap_and_deregister_buf(struct msm_vidc_inst *inst,
 		if (temp->handle[i] && temp->mapped[i] &&
 			!temp->same_fd_ref[i]) {
 			dprintk(VIDC_DBG,
-				"[UNMAP] - handle[%d] = %p fd[%d] = %d",
+				"[UNMAP] - handle[%d] = %pK fd[%d] = %d",
 				i, temp->handle[i], i, temp->fd[i]);
 			msm_comm_smem_free(inst,
 				temp->handle[i]);
