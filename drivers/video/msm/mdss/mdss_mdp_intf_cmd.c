@@ -1020,7 +1020,7 @@ int mdss_mdp_cmd_start(struct mdss_mdp_ctl *ctl)
 
 	atomic_set(&ctx->intf_stopped, 0);
 
-	pr_debug("%s: ctx=%p num=%d mixer=%d\n", __func__,
+	pr_debug("%s: ctx=%pK num=%d mixer=%d\n", __func__,
 				ctx, ctx->pp_num, mixer->num);
 	MDSS_XLOG(ctl->num, ctx->koff_cnt, ctx->clk_enabled,
 					ctx->rdptr_enabled);
