@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2013,2016 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -16,6 +16,10 @@
 #include <linux/delay.h>
 #include <media/v4l2-subdev.h>
 #include <media/msm_cam_sensor.h>
+
+#ifndef I2C_REG_DATA_MAX
+#define I2C_REG_DATA_MAX       (8*1024)
+#endif
 
 struct msm_camera_i2c_client {
 	struct msm_camera_i2c_fn_t *i2c_func_tbl;
