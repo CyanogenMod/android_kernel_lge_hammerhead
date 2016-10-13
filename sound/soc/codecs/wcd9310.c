@@ -9255,7 +9255,7 @@ static int tabla_resume(struct device *dev)
 	struct platform_device *pdev = to_platform_device(dev);
 	struct tabla_priv *tabla = platform_get_drvdata(pdev);
 
-	dev_dbg(dev, "%s: system resume tabla %p\n", __func__, tabla);
+	dev_dbg(dev, "%s: system resume tabla %pK\n", __func__, tabla);
 	if (tabla) {
 		TABLA_ACQUIRE_LOCK(tabla->codec_resource_lock);
 		tabla->mbhc_last_resume = jiffies;

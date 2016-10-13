@@ -132,7 +132,7 @@ static int aic26_hw_params(struct snd_pcm_substream *substream,
 	int fsref, divisor, wlen, pval, jval, dval, qval;
 	u16 reg;
 
-	dev_dbg(&aic26->spi->dev, "aic26_hw_params(substream=%p, params=%p)\n",
+	dev_dbg(&aic26->spi->dev, "aic26_hw_params(substream=%pK, params=%pK)\n",
 		substream, params);
 	dev_dbg(&aic26->spi->dev, "rate=%i format=%i\n", params_rate(params),
 		params_format(params));
@@ -206,7 +206,7 @@ static int aic26_mute(struct snd_soc_dai *dai, int mute)
 	struct aic26 *aic26 = snd_soc_codec_get_drvdata(codec);
 	u16 reg = aic26_reg_read_cache(codec, AIC26_REG_DAC_GAIN);
 
-	dev_dbg(&aic26->spi->dev, "aic26_mute(dai=%p, mute=%i)\n",
+	dev_dbg(&aic26->spi->dev, "aic26_mute(dai=%pK, mute=%i)\n",
 		dai, mute);
 
 	if (mute)
@@ -224,7 +224,7 @@ static int aic26_set_sysclk(struct snd_soc_dai *codec_dai,
 	struct snd_soc_codec *codec = codec_dai->codec;
 	struct aic26 *aic26 = snd_soc_codec_get_drvdata(codec);
 
-	dev_dbg(&aic26->spi->dev, "aic26_set_sysclk(dai=%p, clk_id==%i,"
+	dev_dbg(&aic26->spi->dev, "aic26_set_sysclk(dai=%pK, clk_id==%i,"
 		" freq=%i, dir=%i)\n",
 		codec_dai, clk_id, freq, dir);
 
@@ -241,7 +241,7 @@ static int aic26_set_fmt(struct snd_soc_dai *codec_dai, unsigned int fmt)
 	struct snd_soc_codec *codec = codec_dai->codec;
 	struct aic26 *aic26 = snd_soc_codec_get_drvdata(codec);
 
-	dev_dbg(&aic26->spi->dev, "aic26_set_fmt(dai=%p, fmt==%i)\n",
+	dev_dbg(&aic26->spi->dev, "aic26_set_fmt(dai=%pK, fmt==%i)\n",
 		codec_dai, fmt);
 
 	/* set master/slave audio interface */
