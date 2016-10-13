@@ -3,7 +3,7 @@
  *
  * Copyright (C) Linaro 2012
  * Author: <benjamin.gaignard@linaro.org> for ST-Ericsson.
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013,2016 The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -476,7 +476,7 @@ retry:
 
 	/* keep this for memory release */
 	buffer->priv_virt = info;
-	dev_dbg(sheap->dev, "Allocate buffer %p\n", buffer);
+	dev_dbg(sheap->dev, "Allocate buffer %pK\n", buffer);
 	return info;
 
 err:
@@ -543,7 +543,7 @@ static void ion_secure_cma_free(struct ion_buffer *buffer)
 		container_of(buffer->heap, struct ion_cma_secure_heap, heap);
 	struct ion_secure_cma_buffer_info *info = buffer->priv_virt;
 
-	dev_dbg(sheap->dev, "Release buffer %p\n", buffer);
+	dev_dbg(sheap->dev, "Release buffer %pK\n", buffer);
 	ion_cp_unsecure_buffer(buffer, 1);
 	atomic_sub(buffer->size, &sheap->total_allocated);
 	BUG_ON(atomic_read(&sheap->total_allocated) < 0);
@@ -562,7 +562,7 @@ static int ion_secure_cma_phys(struct ion_heap *heap, struct ion_buffer *buffer,
 		container_of(heap, struct ion_cma_secure_heap, heap);
 	struct ion_secure_cma_buffer_info *info = buffer->priv_virt;
 
-	dev_dbg(sheap->dev, "Return buffer %p physical address 0x%pa\n", buffer,
+	dev_dbg(sheap->dev, "Return buffer %pK physical address 0x%pa\n", buffer,
 		&info->phys);
 
 	*addr = info->phys;
