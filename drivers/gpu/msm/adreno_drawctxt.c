@@ -196,7 +196,7 @@ void adreno_drawctxt_dump(struct kgsl_device *device,
 	start = kgsl_readtimestamp(device, context, KGSL_TIMESTAMP_CONSUMED);
 	retire = kgsl_readtimestamp(device, context, KGSL_TIMESTAMP_RETIRED);
 
-	spin_lock(&drawctxt->lock);
+	spin_lock_bh(&drawctxt->lock);
 	dev_err(device->dev,
 		"  context[%d]: queue=%d, submit=%d, start=%d, retire=%d\n",
 		context->id, queue, drawctxt->submitted_timestamp,
@@ -213,7 +213,7 @@ void adreno_drawctxt_dump(struct kgsl_device *device,
 			goto done;
 		}
 
-		spin_lock(&cmdbatch->lock);
+		spin_lock_bh(&cmdbatch->lock);
 
 		if (!list_empty(&cmdbatch->synclist)) {
 			dev_err(device->dev,
@@ -222,10 +222,10 @@ void adreno_drawctxt_dump(struct kgsl_device *device,
 
 			kgsl_dump_syncpoints(device, cmdbatch);
 		}
-		spin_unlock(&cmdbatch->lock);
+		spin_unlock_bh(&cmdbatch->lock);
 	}
 done:
-	spin_unlock(&drawctxt->lock);
+	spin_unlock_bh(&drawctxt->lock);
 }
 
 /**
