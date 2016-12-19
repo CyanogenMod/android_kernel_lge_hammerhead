@@ -29,13 +29,8 @@
 
 static DEFINE_SPINLOCK(kpss_clock_reg_lock);
 
-struct mux_set_sel_args {
-	struct mux_clk *mux;
-	int sel;
-};
-
 #define LPL_SHIFT	8
-static void __kpss_do_mux_set_sel(struct mux_clk *mux, int sel)
+static void __kpss_mux_set_sel(struct mux_clk *mux, int sel)
 {
 	unsigned long flags;
 	u32 regval;
@@ -59,29 +54,6 @@ static void __kpss_do_mux_set_sel(struct mux_clk *mux, int sel)
 	mb();
 	udelay(1);
 }
-
-static void __kpss_cpu_mux_set_sel(void *data)
-{
-	struct mux_set_sel_args *args = data;
-	__kpss_do_mux_set_sel(args->mux, args->sel);
-}
-
-static void __kpss_mux_set_sel(struct mux_clk *mux, int sel)
-{
-	int cpu = smp_processor_id();
-
-	if (cpu_online(cpu)) {
-		struct mux_set_sel_args args = {
-			.mux = mux,
-			.sel = sel,
-		};
-		smp_call_function_single(cpu, __kpss_cpu_mux_set_sel,
-					 &args, 1);
-	} else {
-		__kpss_do_mux_set_sel(mux, sel);
-	}
-}
-
 static int kpss_mux_set_sel(struct mux_clk *mux, int sel)
 {
 	mux->en_mask = sel;
