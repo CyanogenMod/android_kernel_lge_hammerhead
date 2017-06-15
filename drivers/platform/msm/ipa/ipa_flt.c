@@ -539,7 +539,7 @@ static int __ipa_add_flt_rule(struct ipa_flt_tbl *tbl, enum ipa_ip_type ip,
 		}
 
 		if (((struct ipa_rt_tbl *)rule->rt_tbl_hdl)->cookie !=
-				IPA_COOKIE) {
+				IPA_RT_TBL_COOKIE) {
 			IPAERR("RT table cookie is invalid\n");
 			goto error;
 		}
@@ -554,11 +554,11 @@ static int __ipa_add_flt_rule(struct ipa_flt_tbl *tbl, enum ipa_ip_type ip,
 	entry = kmem_cache_zalloc(ipa_ctx->flt_rule_cache, GFP_KERNEL);
 	if (!entry) {
 		IPAERR("failed to alloc FLT rule object\n");
-		goto mem_alloc_fail;
+		goto error;
 	}
 	INIT_LIST_HEAD(&entry->link);
 	entry->rule = *rule;
-	entry->cookie = IPA_COOKIE;
+	entry->cookie = IPA_FLT_COOKIE;
 	entry->rt_tbl = (struct ipa_rt_tbl *)rule->rt_tbl_hdl;
 	entry->tbl = tbl;
 	if (add_rear)
@@ -575,12 +575,16 @@ static int __ipa_add_flt_rule(struct ipa_flt_tbl *tbl, enum ipa_ip_type ip,
 	if (ipa_insert(&ipa_ctx->flt_rule_hdl_tree, node)) {
 		IPAERR("failed to add to tree\n");
 		WARN_ON(1);
+		goto ipa_insert_failed;
 	}
 
 	return 0;
-
-mem_alloc_fail:
-	kmem_cache_free(ipa_ctx->tree_node_cache, node);
+ipa_insert_failed:
+	tbl->rule_cnt--;
+	if (entry->rt_tbl)
+		entry->rt_tbl->ref_cnt--;
+	list_del(&entry->link);
+	kmem_cache_free(ipa_ctx->flt_rule_cache, entry);
 error:
 
 	return -EPERM;
@@ -598,7 +602,7 @@ static int __ipa_del_flt_rule(u32 rule_hdl)
 		return -EINVAL;
 	}
 
-	if (entry == NULL || (entry->cookie != IPA_COOKIE)) {
+	if (entry == NULL || (entry->cookie != IPA_FLT_COOKIE)) {
 		IPAERR("bad params\n");
 
 		return -EINVAL;
