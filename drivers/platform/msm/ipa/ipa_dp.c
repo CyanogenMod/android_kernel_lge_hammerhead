@@ -17,8 +17,6 @@
 #include <linux/netdevice.h>
 #include "ipa_i.h"
 
-#define list_next_entry(pos, member) \
-	list_entry(pos->member.next, typeof(*pos), member)
 #define POLLING_INACTIVITY_RX 40
 #define POLLING_MIN_SLEEP_RX 2350
 #define POLLING_MAX_SLEEP_RX 2450
