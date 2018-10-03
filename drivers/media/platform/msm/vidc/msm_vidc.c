@@ -208,6 +208,15 @@ int msm_vidc_reqbufs(void *instance, struct v4l2_requestbuffers *b)
 	return -EINVAL;
 }
 
+static inline bool check_buf_fd_or_addr(u32 fd, u32 addr, u32 check_fd,
+			u32 check_addr)
+{
+	if (fd)
+		return fd == check_fd ? true : false;
+	if (addr)
+		return addr == check_addr ? true : false;
+	return false;
+}
 struct buffer_info *get_registered_buf(struct msm_vidc_inst *inst,
 		struct list_head *list, int fd, u32 buff_off, u32 size,
 		u32 device_addr, int *plane)
@@ -225,12 +234,9 @@ struct buffer_info *get_registered_buf(struct msm_vidc_inst *inst,
 		list_for_each_entry(temp, list, list) {
 			for (i = 0; (i < temp->num_planes)
 				&& (i < VIDEO_MAX_PLANES); i++) {
-				bool ion_hndl_matches = temp->handle[i] ?
-						msm_smem_compare_buffers(inst->mem_client, fd,
-						temp->handle[i]->smem_priv) : false;
-				if (temp &&
-						(ion_hndl_matches ||
-						(device_addr == temp->device_addr[i])) &&
+				if (temp && check_buf_fd_or_addr(fd,
+					device_addr, temp->fd[i],
+					temp->device_addr[i]) &&
 						(CONTAINS(temp->buff_off[i],
 						temp->size[i], buff_off)
 						 || CONTAINS(buff_off,
@@ -432,9 +438,6 @@ int map_and_register_buf(struct msm_vidc_inst *inst, struct v4l2_buffer *b)
 	struct buffer_info *temp;
 	int plane = 0;
 	int i = 0, rc = 0;
-	bool check_same_fd_handle = !is_dynamic_output_buffer_mode(b, inst) &&
-		!(inst->session_type == MSM_VIDC_ENCODER &&
-			b->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE);
 
 	if (!b || !inst) {
 		dprintk(VIDC_ERR, "%s: invalid input\n", __func__);
@@ -496,9 +499,8 @@ int map_and_register_buf(struct msm_vidc_inst *inst, struct v4l2_buffer *b)
 		if (rc < 0)
 			goto exit;
 
-		if (check_same_fd_handle)
-			temp = get_same_fd_buffer(inst, &inst->registered_bufs,
-						b->m.planes[i].reserved[0], &plane);
+		temp = get_same_fd_buffer(inst, &inst->registered_bufs,
+					b->m.planes[i].reserved[0], &plane);
 
 		populate_buf_info(binfo, b, i);
 		if (temp) {
@@ -932,7 +934,8 @@ int msm_vidc_dqbuf(void *instance, struct v4l2_buffer *b)
 		if (!inst->map_output_buffer)
 			continue;
 		if (EXTRADATA_IDX(b->length) &&
-			i == EXTRADATA_IDX(b->length)) {
+			(i == EXTRADATA_IDX(b->length)) &&
+			!b->m.planes[i].m.userptr) {
 			continue;
 		}
 		buffer_info = device_to_uvaddr(inst,
